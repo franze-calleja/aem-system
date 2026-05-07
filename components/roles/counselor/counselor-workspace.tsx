@@ -8,24 +8,22 @@ const metrics = [
 
 const sections = [
   {
-    title: "Caseload dashboard",
+    title: "Caseload Dashboard",
+    href: "/counselor/caseload",
     description:
       "Review moderate and high-risk students, sort by urgency, and track changes across the current school year.",
   },
   {
-    title: "Counseling notes",
+    title: "Intervention Builder",
+    href: "/counselor/interventions",
     description:
-      "Manage private notes and counselor-only context that informs interventions without exposing note bodies elsewhere.",
+      "Review AI-generated recommendation drafts and build formal individual, section, grade-level, or school-wide intervention plans.",
   },
   {
-    title: "Recommendation queue",
+    title: "Feedback Queue",
+    href: "/counselor/feedback",
     description:
-      "Review algorithmic and Gemini-assisted drafts, then convert them into actual interventions when appropriate.",
-  },
-  {
-    title: "Revision workflow",
-    description:
-      "Process teacher and adviser feedback, create revisions, and manage approval flow for broader-scope plans.",
+      "Process observation notes and revision requests submitted by teachers. Acknowledge, incorporate, or discuss each item.",
   },
 ];
 
@@ -37,7 +35,7 @@ export default function CounselorWorkspace() {
       title="Student support and intervention hub"
       description="Own the intervention lifecycle, maintain counseling context, and act on risk signals with accountable human decisions."
       schoolYear="SY 2024-2025"
-      theme="rose"
+      theme="amber"
       metrics={metrics}
       sections={sections}
     />

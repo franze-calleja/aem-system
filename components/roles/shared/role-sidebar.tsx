@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Sidebar,
@@ -8,6 +8,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
+  SidebarFooter,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -66,6 +67,16 @@ function IconFolder() {
   );
 }
 
+function IconLogout() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M19 3h2v18h-2" />
+    </svg>
+  );
+}
+
 
 
 function sectionSlug(title: string) {
@@ -83,6 +94,7 @@ function splitHref(href: string) {
 
 export default function RoleSidebar({ role, badge, title, schoolYear, theme, sections }: RoleSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { open } = useSidebar();
   const [hash, setHash] = useState("");
 
@@ -96,6 +108,12 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
   }, []);
 
   const homeHref = roleHome[role];
+
+  const handleLogout = () => {
+    window.localStorage.removeItem("aem-teacher-classes");
+    window.localStorage.removeItem("aem-counselor-data");
+    router.push("/");
+  };
 
   const isActiveHref = useMemo(
     () => (href: string) => {
@@ -170,7 +188,16 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
           </SidebarGroup>
         </SidebarContent>
 
-        {/* Switch Role footer removed */}
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleLogout} className={!open ? "justify-center" : undefined}>
+                <IconLogout />
+                <span className={open ? undefined : "sr-only"}>Logout</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
       </Sidebar>
       <SidebarRail />
     </>
