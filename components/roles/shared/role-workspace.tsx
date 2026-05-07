@@ -1,18 +1,16 @@
 import Link from "next/link";
-import RoleSidebar from "@/components/roles/shared/role-sidebar";
+import RoleSidebar, { type NavItem } from "@/components/roles/shared/role-sidebar";
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
 
+export type { NavItem };
+
 type WorkspaceMetric = {
   label: string;
   value: string;
-};
-
-type WorkspaceSection = {
-  title: string;
-  description: string;
+  sub?: string;
 };
 
 type ThemeName = "indigo" | "emerald" | "amber" | "rose";
@@ -24,33 +22,30 @@ type RoleWorkspaceProps = {
   schoolYear: string;
   theme: ThemeName;
   metrics: WorkspaceMetric[];
-  sections: WorkspaceSection[];
+  navItems: NavItem[];
+  children?: React.ReactNode;
 };
 
 const themeStyles = {
   indigo: {
-    badge: "bg-indigo-50 text-indigo-700 border-slate-200",
+    badge: "bg-indigo-50 text-indigo-700 border-indigo-200",
     metricValue: "text-indigo-700",
-    sectionIcon: "bg-indigo-50 text-indigo-700",
-    action: "bg-indigo-600 text-white hover:bg-indigo-700",
+    cardLink: "bg-indigo-50 text-indigo-700",
   },
   emerald: {
-    badge: "bg-emerald-50 text-emerald-700 border-slate-200",
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
     metricValue: "text-emerald-700",
-    sectionIcon: "bg-emerald-50 text-emerald-700",
-    action: "bg-emerald-600 text-white hover:bg-emerald-700",
+    cardLink: "bg-emerald-50 text-emerald-700",
   },
   amber: {
-    badge: "bg-amber-50 text-amber-700 border-slate-200",
+    badge: "bg-amber-50 text-amber-700 border-amber-200",
     metricValue: "text-amber-700",
-    sectionIcon: "bg-amber-50 text-amber-700",
-    action: "bg-amber-500 text-white hover:bg-amber-600",
+    cardLink: "bg-amber-50 text-amber-700",
   },
   rose: {
-    badge: "bg-rose-50 text-rose-700 border-slate-200",
+    badge: "bg-rose-50 text-rose-700 border-rose-200",
     metricValue: "text-rose-700",
-    sectionIcon: "bg-rose-50 text-rose-700",
-    action: "bg-rose-600 text-white hover:bg-rose-700",
+    cardLink: "bg-rose-50 text-rose-700",
   },
 } as const;
 
@@ -61,7 +56,8 @@ export default function RoleWorkspace({
   schoolYear,
   theme,
   metrics,
-  sections,
+  navItems,
+  children,
 }: RoleWorkspaceProps) {
   const styles = themeStyles[theme];
 
@@ -73,26 +69,25 @@ export default function RoleWorkspace({
           title={title}
           schoolYear={schoolYear}
           theme={theme}
-          sections={sections}
+          navItems={navItems}
         />
 
         <SidebarInset>
-          <main className="min-h-screen px-2 py-4 md:px-8 lg:px-4">
+          <main className="min-h-screen px-4 py-6 md:px-8">
             <div className="w-full flex flex-col gap-6">
+              {/* Header */}
               <header className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8">
                 <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                   <div className="max-w-3xl">
-                    <div className="flex items-center gap-3">
-                      <div className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] ${styles.badge}`}>
-                          {badge}
-                        </div>
+                    <div className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${styles.badge}`}>
+                      {badge}
                     </div>
                     <h1 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
-                    <p className="mt-3 text-sm leading-6 text-slate-600 md:text-sm">{description}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-600">
+                  <div className="flex shrink-0 items-center gap-3">
+                    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
                       {schoolYear}
                     </div>
                     <Link
@@ -105,43 +100,36 @@ export default function RoleWorkspace({
                 </div>
               </header>
 
-              <section className="grid gap-4 md:grid-cols-3">
+              {/* Metrics */}
+              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {metrics.map((metric) => (
                   <article key={metric.label} className="rounded-2xl border border-slate-200 bg-white p-5">
-                    <p className="text-xs text-slate-500">{metric.label}</p>
-                    <p className={`mt-3 text-xl font-semibold ${styles.metricValue}`}>{metric.value}</p>
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{metric.label}</p>
+                    <p className={`mt-3 text-2xl font-semibold ${styles.metricValue}`}>{metric.value}</p>
+                    {metric.sub ? <p className="mt-1 text-xs text-slate-500">{metric.sub}</p> : null}
                   </article>
                 ))}
               </section>
 
-              <section className="grid gap-4 md:grid-cols-2">
-                {sections.map((section) => {
-                  const sectionId = section.title
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/^-|-$/g, "");
+              {/* Role-specific overview content */}
+              {children}
 
-                  return (
-                    <article
-                      id={sectionId}
-                      key={section.title}
-                      className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-6"
-                    >
-                      <div className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${styles.sectionIcon}`}>
-                        {section.title.slice(0, 1)}
-                      </div>
-                      <h2 className="mt-4 text-lg font-semibold text-slate-900">{section.title}</h2>
-                      <p className="mt-2 text-sm leading-7 text-slate-600">{section.description}</p>
-                    </article>
-                  );
-                })}
+              {/* Nav quick-access cards */}
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {navItems.slice(1).map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="group rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm"
+                  >
+                    <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold ${styles.cardLink}`}>
+                      {item.label.slice(0, 1)}
+                    </div>
+                    <h2 className="mt-4 text-sm font-semibold text-slate-900 group-hover:text-slate-700">{item.label}</h2>
+                    <p className="mt-1 text-xs text-slate-400 group-hover:text-slate-500">Open module →</p>
+                  </Link>
+                ))}
               </section>
-
-              <div className="flex justify-end">
-                <button className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${styles.action}`} type="button">
-                  Continue building this module
-                </button>
-              </div>
             </div>
           </main>
         </SidebarInset>
