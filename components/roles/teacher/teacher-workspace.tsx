@@ -8,25 +8,16 @@ const metrics = [
 
 const sections = [
   {
-    title: "My classes",
+    title: "My Classes",
+    href: "/teacher/my-classes",
     description:
-      "Open handled sections, review rosters, and move quickly into daily classroom tasks for the active school year.",
+      "Open handled sections, review rosters, and move quickly into attendance, grades, student risk, and behavioral logging.",
   },
   {
-    title: "Attendance entry",
+    title: "Intervention Feedback",
+    href: "/teacher/intervention-feedback",
     description:
-      "Record present, absent, tardy, and excused statuses with a keyboard-friendly workflow built for speed.",
-  },
-  {
-    title: "Student risk view",
-    href: "/teacher/student-risk",
-    description:
-      "See which students need attention, with transparent factor explanations but without private counseling content.",
-  },
-  {
-    title: "Intervention feedback",
-    description:
-      "Submit observation notes, request revisions, and log sessions you personally conducted for active plans.",
+      "View active intervention plans, log sessions you personally conducted, submit observation notes, and request plan revisions.",
   },
 ];
 

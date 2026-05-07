@@ -4,25 +4,14 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 const sections = [
   {
-    title: "My classes",
-    description:
-      "Open handled sections, review rosters, and move quickly into daily classroom tasks for the active school year.",
+    title: "My Classes",
+    href: "/teacher/my-classes",
+    description: "Open handled sections, review rosters, manage attendance, grades, and student risk.",
   },
   {
-    title: "Attendance entry",
-    description:
-      "Record present, absent, tardy, and excused statuses with a keyboard-friendly workflow built for speed.",
-  },
-  {
-    title: "Student risk view",
-    href: "/teacher/student-risk",
-    description:
-      "See which students need attention, with transparent factor explanations but without private counseling content.",
-  },
-  {
-    title: "Intervention feedback",
-    description:
-      "Submit observation notes, request revisions, and log sessions you personally conducted for active plans.",
+    title: "Intervention Feedback",
+    href: "/teacher/intervention-feedback",
+    description: "View active intervention plans, log sessions you ran, and submit observations to the counselor.",
   },
 ];
 

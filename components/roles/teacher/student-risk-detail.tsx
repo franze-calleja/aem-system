@@ -43,11 +43,11 @@ export default function TeacherStudentRiskDetail({ classId, studentId }: { class
           The selected student or class is unavailable. Return to the student risk overview or the class roster.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Link href="/teacher/student-risk" className="rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-            Back to Student Risk View
-          </Link>
-          <Link href="/teacher/my-classes" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">
+          <Link href="/teacher/my-classes" className="rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-medium text-white">
             Back to My Classes
+          </Link>
+          <Link href="/teacher/intervention-feedback" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">
+            Intervention Feedback
           </Link>
         </div>
       </div>
@@ -109,8 +109,8 @@ export default function TeacherStudentRiskDetail({ classId, studentId }: { class
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link href="/teacher/student-risk" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
-              Back to overview
+            <Link href={`/teacher/my-classes/${summary.classId}`} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+              Back to class
             </Link>
             <Link href={studentRiskHref(summary.classId, summary.studentId)} className="rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
               Shareable profile link

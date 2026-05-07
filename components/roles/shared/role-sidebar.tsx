@@ -155,10 +155,7 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
             <SidebarMenu>
               {sections.map((section) => {
                 const href =
-                  section.href ??
-                  (role === "teacher" && section.title.toLowerCase().includes("my class")
-                    ? "/teacher/my-classes"
-                    : `${homeHref}#${sectionSlug(section.title)}`);
+                section.href ?? `${homeHref}#${sectionSlug(section.title)}`;
 
                 return (
                   <SidebarMenuItem key={section.title}>

@@ -1,5 +1,5 @@
+import InterventionFeedback from "@/components/roles/teacher/intervention-feedback";
 import RoleSidebar from "@/components/roles/shared/role-sidebar";
-import TeacherStudentRiskDetail from "@/components/roles/teacher/student-risk-detail";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 const sections = [
@@ -15,13 +15,7 @@ const sections = [
   },
 ];
 
-export default async function TeacherStudentRiskDetailPage({
-  params,
-}: {
-  params: Promise<{ classId: string; studentId: string }>;
-}) {
-  const { classId, studentId } = await params;
-
+export default function InterventionFeedbackPage() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen bg-slate-50 text-slate-900">
@@ -37,7 +31,7 @@ export default async function TeacherStudentRiskDetailPage({
         <SidebarInset>
           <main className="min-h-screen px-4 py-6 md:px-8 lg:px-10">
             <div className="w-full flex flex-col gap-6">
-              <TeacherStudentRiskDetail classId={classId} studentId={studentId} />
+              <InterventionFeedback />
             </div>
           </main>
         </SidebarInset>

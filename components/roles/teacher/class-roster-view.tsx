@@ -5,6 +5,8 @@ import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import {
   type AssessmentKind,
   type AttendanceStatus,
+  type BehaviorCategory,
+  type BehaviorSeverity,
   useTeacherClasses,
 } from "@/components/roles/teacher/teacher-class-store";
 import { buildStudentRiskSummary, studentRiskHref } from "@/components/roles/teacher/student-risk-data";
@@ -38,13 +40,19 @@ export default function ClassRosterView({ classId }: { classId: string }) {
     addAssessmentColumn,
     updateAssessmentScore,
     removeAssessmentColumn,
+    addBehavioralIncident,
   } = useTeacherClasses();
 
   const activeClass = getClassById(classId);
-  const [activeTab, setActiveTab] = useState<"attendance" | "gradebook">("attendance");
+  const [activeTab, setActiveTab] = useState<"attendance" | "gradebook" | "risk" | "behavioral">("attendance");
   const [quarter, setQuarter] = useState(1);
   const [newAttendanceDate, setNewAttendanceDate] = useState(todayString());
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
+  const [behaviorStudentId, setBehaviorStudentId] = useState("");
+  const [behaviorDate, setBehaviorDate] = useState(todayString());
+  const [behaviorCategory, setBehaviorCategory] = useState<BehaviorCategory>("Behavioral");
+  const [behaviorSeverity, setBehaviorSeverity] = useState<BehaviorSeverity>("Low");
+  const [behaviorDescription, setBehaviorDescription] = useState("");
 
   useEffect(() => {
     if (activeClass && activeClass.attendanceDays.length === 0) {
@@ -97,6 +105,13 @@ export default function ClassRosterView({ classId }: { classId: string }) {
       { present: 0, absent: 0, tardy: 0, excused: 0 },
     );
   }, [activeClass, selectedDay]);
+
+  const riskSummaries = useMemo(() => {
+    if (!activeClass) return [];
+    return activeClass.students
+      .map((student) => buildStudentRiskSummary(activeClass, student))
+      .sort((a, b) => b.score - a.score);
+  }, [activeClass]);
 
   const setAttendance = (studentId: string, status: AttendanceStatus) => {
     if (!selectedDay) {
@@ -158,6 +173,19 @@ export default function ClassRosterView({ classId }: { classId: string }) {
     return (values.reduce((total, value) => total + value, 0) / values.length).toFixed(1);
   };
 
+  const submitBehaviorIncident = () => {
+    if (!behaviorStudentId || !behaviorDescription.trim()) return;
+    addBehavioralIncident(classId, {
+      studentId: behaviorStudentId,
+      date: behaviorDate,
+      category: behaviorCategory,
+      severity: behaviorSeverity,
+      description: behaviorDescription.trim(),
+    });
+    setBehaviorDescription("");
+    setBehaviorStudentId("");
+  };
+
   if (!activeClass) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white p-6">
@@ -216,6 +244,24 @@ export default function ClassRosterView({ classId }: { classId: string }) {
           }`}
         >
           Gradebook
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("risk")}
+          className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+            activeTab === "risk" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          At-Risk Students
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("behavioral")}
+          className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+            activeTab === "behavioral" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          Behavioral Log
         </button>
       </div>
 
@@ -421,6 +467,204 @@ export default function ClassRosterView({ classId }: { classId: string }) {
               No assessment columns yet. Click <span className="font-medium text-slate-700">Add Quiz</span>, <span className="font-medium text-slate-700">Add Exam</span>, or another type to start this quarter.
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {activeTab === "risk" ? (
+        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">At-Risk Students</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Risk scores combine attendance and academic signals visible to teachers. Sorted highest first. Counseling data is excluded.
+              </p>
+            </div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">{riskSummaries.length} students</p>
+          </div>
+
+          {riskSummaries.length === 0 ? (
+            <p className="text-sm text-slate-500">No students in this class yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {riskSummaries.map((risk) => {
+                const bandColor =
+                  risk.band === "High"
+                    ? "bg-rose-100 text-rose-700 border-rose-200"
+                    : risk.band === "Moderate"
+                    ? "bg-amber-100 text-amber-800 border-amber-200"
+                    : "bg-emerald-100 text-emerald-700 border-emerald-200";
+
+                return (
+                  <div key={risk.studentId} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{risk.studentName}</p>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${bandColor}`}>
+                          {risk.band} Risk
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">LRN {risk.lrn}</p>
+                      <div className="mt-3 space-y-2">
+                        {risk.factors.slice(0, 2).map((factor) => (
+                          <div key={factor.label} className="flex items-start gap-2">
+                            <span
+                              className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                                factor.tone === "high" ? "bg-rose-500" : factor.tone === "medium" ? "bg-amber-500" : "bg-slate-400"
+                              }`}
+                            />
+                            <p className="text-sm text-slate-600">
+                              <span className="font-medium">{factor.label}</span> — {factor.detail}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="text-right">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Score</p>
+                        <p className="text-2xl font-semibold text-slate-900">{risk.score}</p>
+                      </div>
+                      <Link
+                        href={studentRiskHref(activeClass.id, risk.studentId)}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
+                      >
+                        View profile
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {activeTab === "behavioral" ? (
+        <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Behavioral Log</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Record a classroom observation. Behavioral records are visible to the counselor and contribute to the student's case file.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-900">New incident</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block space-y-1 text-sm text-slate-700">
+                <span className="font-medium">Student</span>
+                <select
+                  value={behaviorStudentId}
+                  onChange={(e) => setBehaviorStudentId(e.target.value)}
+                  className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+                >
+                  <option value="">Select a student</option>
+                  {activeClass.students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block space-y-1 text-sm text-slate-700">
+                <span className="font-medium">Date</span>
+                <input
+                  type="date"
+                  value={behaviorDate}
+                  onChange={(e) => setBehaviorDate(e.target.value)}
+                  className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+                />
+              </label>
+
+              <label className="block space-y-1 text-sm text-slate-700">
+                <span className="font-medium">Category</span>
+                <select
+                  value={behaviorCategory}
+                  onChange={(e) => setBehaviorCategory(e.target.value as BehaviorCategory)}
+                  className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+                >
+                  {(["Academic", "Attendance", "Behavioral", "Social-Emotional"] as BehaviorCategory[]).map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block space-y-1 text-sm text-slate-700">
+                <span className="font-medium">Severity</span>
+                <select
+                  value={behaviorSeverity}
+                  onChange={(e) => setBehaviorSeverity(e.target.value as BehaviorSeverity)}
+                  className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+                >
+                  {(["Low", "Moderate", "High"] as BehaviorSeverity[]).map((sev) => (
+                    <option key={sev} value={sev}>
+                      {sev}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label className="mt-3 block space-y-1 text-sm text-slate-700">
+              <span className="font-medium">Description</span>
+              <textarea
+                value={behaviorDescription}
+                onChange={(e) => setBehaviorDescription(e.target.value)}
+                rows={3}
+                placeholder="Describe the incident briefly..."
+                className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={submitBehaviorIncident}
+              disabled={!behaviorStudentId || !behaviorDescription.trim()}
+              className="mt-3 rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
+            >
+              Log Incident
+            </button>
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Incident log</p>
+            {activeClass.behavioralIncidents.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">No behavioral incidents logged yet for this class.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {activeClass.behavioralIncidents.map((incident) => {
+                  const student = activeClass.students.find((s) => s.id === incident.studentId);
+                  const sevColor =
+                    incident.severity === "High"
+                      ? "bg-rose-100 text-rose-700"
+                      : incident.severity === "Moderate"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-slate-100 text-slate-600";
+
+                  return (
+                    <div key={incident.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-slate-900">{student?.name ?? "Unknown student"}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                            {incident.category}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${sevColor}`}>
+                            {incident.severity}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-400">{incident.date}</p>
+                      <p className="mt-2 text-sm text-slate-600">{incident.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
       ) : null}
     </div>

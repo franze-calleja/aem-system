@@ -5,6 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 export type AttendanceStatus = "present" | "absent" | "tardy" | "excused";
 export type AssessmentKind = "quiz" | "exam" | "pre-test" | "post-test";
 export type Semester = "1st Semester" | "2nd Semester" | "Summer";
+export type BehaviorCategory = "Academic" | "Attendance" | "Behavioral" | "Social-Emotional";
+export type BehaviorSeverity = "Low" | "Moderate" | "High";
+export type BehavioralIncident = {
+  id: string;
+  studentId: string;
+  date: string;
+  category: BehaviorCategory;
+  severity: BehaviorSeverity;
+  description: string;
+};
 
 export const DEFAULT_SCHOOL_YEAR = "SY 2024-2025";
 export const DEFAULT_SEMESTER: Semester = "1st Semester";
@@ -43,6 +53,7 @@ export type TeacherClass = {
   students: TeacherStudent[];
   attendanceDays: AttendanceDay[];
   assessmentColumns: AssessmentColumn[];
+  behavioralIncidents: BehavioralIncident[];
 };
 
 export type TeacherClassInput = {
@@ -77,6 +88,7 @@ const defaultClasses: TeacherClass[] = [
     ],
     attendanceDays: [],
     assessmentColumns: [],
+    behavioralIncidents: [],
   },
   {
     id: "10-pascal",
@@ -96,6 +108,7 @@ const defaultClasses: TeacherClass[] = [
     ],
     attendanceDays: [],
     assessmentColumns: [],
+    behavioralIncidents: [],
   },
   {
     id: "11-einstein",
@@ -115,6 +128,7 @@ const defaultClasses: TeacherClass[] = [
     ],
     attendanceDays: [],
     assessmentColumns: [],
+    behavioralIncidents: [],
   },
 ];
 
@@ -279,6 +293,7 @@ function normalizeClass(rawClass: unknown): TeacherClass | null {
     students,
     attendanceDays: normalizeAttendanceDays(candidate.attendanceDays, students, legacyAttendance),
     assessmentColumns: normalizeAssessmentColumns(candidate.assessmentColumns, students, legacyGradesByStudent),
+    behavioralIncidents: Array.isArray(candidate.behavioralIncidents) ? (candidate.behavioralIncidents as BehavioralIncident[]) : [],
   };
 }
 
@@ -291,6 +306,7 @@ function cloneDefaultClasses() {
         ? item.attendanceDays.map((day) => ({ ...day, statusByStudent: { ...day.statusByStudent } }))
         : [createAttendanceDay(item.students)],
     assessmentColumns: item.assessmentColumns.map((column) => ({ ...column, scoreByStudent: { ...column.scoreByStudent } })),
+    behavioralIncidents: item.behavioralIncidents.map((incident) => ({ ...incident })),
   }));
 }
 
@@ -433,6 +449,16 @@ export function useTeacherClasses() {
     );
   };
 
+  const addBehavioralIncident = (classId: string, incident: Omit<BehavioralIncident, "id">) => {
+    setClasses((current) =>
+      current.map((item) =>
+        item.id === classId
+          ? { ...item, behavioralIncidents: [...item.behavioralIncidents, { ...incident, id: `incident-${Date.now()}` }] }
+          : item,
+      ),
+    );
+  };
+
   return useMemo(
     () => ({
       classes,
@@ -446,6 +472,7 @@ export function useTeacherClasses() {
       addAssessmentColumn,
       updateAssessmentScore,
       removeAssessmentColumn,
+      addBehavioralIncident,
     }),
     [classes],
   );
