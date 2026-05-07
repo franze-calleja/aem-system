@@ -1,5 +1,5 @@
-import ClassRosterView from "@/components/roles/teacher/class-roster-view";
 import RoleSidebar from "@/components/roles/shared/role-sidebar";
+import TeacherStudentRiskDetail from "@/components/roles/teacher/student-risk-detail";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 const sections = [
@@ -26,12 +26,12 @@ const sections = [
   },
 ];
 
-export default async function ClassRosterPage({
+export default async function TeacherStudentRiskDetailPage({
   params,
 }: {
-  params: Promise<{ classId: string }>;
+  params: Promise<{ classId: string; studentId: string }>;
 }) {
-  const { classId } = await params;
+  const { classId, studentId } = await params;
 
   return (
     <SidebarProvider>
@@ -48,7 +48,7 @@ export default async function ClassRosterPage({
         <SidebarInset>
           <main className="min-h-screen px-4 py-6 md:px-8 lg:px-10">
             <div className="w-full flex flex-col gap-6">
-              <ClassRosterView classId={classId} />
+              <TeacherStudentRiskDetail classId={classId} studentId={studentId} />
             </div>
           </main>
         </SidebarInset>

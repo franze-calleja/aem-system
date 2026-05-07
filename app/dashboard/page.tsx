@@ -14,7 +14,6 @@ export default function DashboardPage() {
         <header className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white/5 p-6 backdrop-blur-xl md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-cyan-100/75">AEM System</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight">Workspace ready</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
               This placeholder dashboard gives the login flow a destination while the rest of the
               modular front end is built out.

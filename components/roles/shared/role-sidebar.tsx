@@ -1,10 +1,10 @@
 'use client';
 
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
@@ -19,11 +19,15 @@ import {
 type WorkspaceSection = {
   title: string;
   description: string;
+  href?: string;
 };
+
+type RoleName = "admin" | "teacher" | "counselor" | "principal";
 
 type ThemeName = "indigo" | "emerald" | "amber" | "rose";
 
 type RoleSidebarProps = {
+  role: RoleName;
   badge: string;
   title: string;
   schoolYear: string;
@@ -31,12 +35,13 @@ type RoleSidebarProps = {
   sections: WorkspaceSection[];
 };
 
-const roleLinks = [
-  { label: "Admin", href: "/admin" },
-  { label: "Teacher", href: "/teacher" },
-  { label: "Counselor", href: "/counselor" },
-  { label: "Principal", href: "/principal" },
-];
+// role switch removed from the sidebar; keep roleHome for role-based home links
+const roleHome = {
+  admin: "/admin",
+  teacher: "/teacher",
+  counselor: "/counselor",
+  principal: "/principal",
+} as const;
 
 const themeAccent = {
   indigo: "text-indigo-700 bg-indigo-50 border-slate-200",
@@ -61,31 +66,53 @@ function IconFolder() {
   );
 }
 
-function IconUser() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <path d="M12 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
-    </svg>
-  );
+
+
+function sectionSlug(title: string) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function IconBack() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5" />
-      <path d="M12 19l-7-7 7-7" />
-    </svg>
-  );
+function splitHref(href: string) {
+  const [path, hash] = href.split("#");
+
+  return {
+    path: path || "/",
+    hash: hash ? `#${hash}` : "",
+  };
 }
 
-function sectionAnchor(title: string) {
-  return `#${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-}
-
-export default function RoleSidebar({ badge, title, schoolYear, theme, sections }: RoleSidebarProps) {
+export default function RoleSidebar({ role, badge, title, schoolYear, theme, sections }: RoleSidebarProps) {
   const pathname = usePathname();
   const { open } = useSidebar();
+  const [hash, setHash] = useState("");
+
+  useEffect(() => {
+    const updateHash = () => setHash(window.location.hash);
+
+    updateHash();
+    window.addEventListener("hashchange", updateHash);
+
+    return () => window.removeEventListener("hashchange", updateHash);
+  }, []);
+
+  const homeHref = roleHome[role];
+
+  const isActiveHref = useMemo(
+    () => (href: string) => {
+      const { path, hash: hrefHash } = splitHref(href);
+
+      if (hrefHash) {
+        return pathname === path && hash === hrefHash;
+      }
+
+      if (path === homeHref) {
+        return pathname === path;
+      }
+
+      return pathname === path || pathname.startsWith(`${path}/`);
+    },
+    [hash, pathname],
+  );
 
   return (
     <>
@@ -115,7 +142,7 @@ export default function RoleSidebar({ badge, title, schoolYear, theme, sections 
             {open && <SidebarGroupLabel>Workspace</SidebarGroupLabel>}
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton active href={pathname} className={!open ? "justify-center" : undefined}>
+                <SidebarMenuButton active={isActiveHref(homeHref)} href={homeHref} className={!open ? "justify-center" : undefined}>
                   <IconHome />
                   <span className={open ? undefined : "sr-only"}>Overview</span>
                 </SidebarMenuButton>
@@ -127,13 +154,15 @@ export default function RoleSidebar({ badge, title, schoolYear, theme, sections 
             {open && <SidebarGroupLabel>Modules</SidebarGroupLabel>}
             <SidebarMenu>
               {sections.map((section) => {
-                const href = section.title.toLowerCase().includes("my class")
-                  ? "/teacher/my-classes"
-                  : sectionAnchor(section.title);
+                const href =
+                  section.href ??
+                  (role === "teacher" && section.title.toLowerCase().includes("my class")
+                    ? "/teacher/my-classes"
+                    : `${homeHref}#${sectionSlug(section.title)}`);
 
                 return (
                   <SidebarMenuItem key={section.title}>
-                    <SidebarMenuButton href={href} className={!open ? "justify-center" : undefined}>
+                    <SidebarMenuButton active={isActiveHref(href)} href={href} className={!open ? "justify-center" : undefined}>
                       <IconFolder />
                       <span className={open ? undefined : "sr-only"}>{section.title}</span>
                     </SidebarMenuButton>
@@ -144,27 +173,7 @@ export default function RoleSidebar({ badge, title, schoolYear, theme, sections 
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter>
-          <SidebarGroup className="mb-0">
-            {open && <SidebarGroupLabel>Switch Role</SidebarGroupLabel>}
-            <SidebarMenu>
-              {roleLinks.map((role) => (
-                <SidebarMenuItem key={role.href}>
-                  <SidebarMenuButton active={pathname === role.href} href={role.href} className={!open ? "justify-center" : undefined}>
-                    <IconUser />
-                    <span className={open ? undefined : "sr-only"}>{role.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-              <SidebarMenuItem>
-                <SidebarMenuButton href="/" className={!open ? "justify-center" : undefined}>
-                  <IconBack />
-                  <span className={open ? undefined : "sr-only"}>Back to login</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarFooter>
+        {/* Switch Role footer removed */}
       </Sidebar>
       <SidebarRail />
     </>

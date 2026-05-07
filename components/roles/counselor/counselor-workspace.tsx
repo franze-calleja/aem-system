@@ -32,6 +32,7 @@ const sections = [
 export default function CounselorWorkspace() {
   return (
     <RoleWorkspace
+      role="counselor"
       badge="Counselor workspace"
       title="Student support and intervention hub"
       description="Own the intervention lifecycle, maintain counseling context, and act on risk signals with accountable human decisions."

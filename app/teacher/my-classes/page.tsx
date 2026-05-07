@@ -15,6 +15,7 @@ const sections = [
   },
   {
     title: "Student risk view",
+    href: "/teacher/student-risk",
     description:
       "See which students need attention, with transparent factor explanations but without private counseling content.",
   },
@@ -30,6 +31,7 @@ export default function MyClassesPage() {
     <SidebarProvider>
       <div className="flex min-h-screen bg-slate-50 text-slate-900">
         <RoleSidebar
+          role="teacher"
           badge="Teacher workspace"
           title="Classroom operations dashboard"
           schoolYear="SY 2024-2025"
@@ -40,12 +42,6 @@ export default function MyClassesPage() {
         <SidebarInset>
           <main className="min-h-screen px-4 py-6 md:px-8 lg:px-10">
             <div className="w-full flex flex-col gap-6">
-              <header className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold">My Classes</h1>
-                </div>
-              </header>
-
               <section>
                 <MyClasses />
               </section>

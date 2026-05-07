@@ -2,10 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { type TeacherClassInput, useTeacherClasses } from "@/components/roles/teacher/teacher-class-store";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  DEFAULT_SEMESTER,
+  type Semester,
+  type TeacherClassInput,
+  useTeacherClasses,
+} from "@/components/roles/teacher/teacher-class-store";
 
 const emptyDraft: TeacherClassInput = {
   name: "",
+  schoolYear: DEFAULT_SCHOOL_YEAR,
+  semester: DEFAULT_SEMESTER,
   gradeLevel: "",
   section: "",
   subject: "",
@@ -13,14 +21,33 @@ const emptyDraft: TeacherClassInput = {
   schedule: "",
 };
 
+const semesterOptions: Semester[] = ["1st Semester", "2nd Semester", "Summer"];
+type SemesterFilter = Semester | "All";
+
 export default function MyClasses() {
   const router = useRouter();
   const { classes, addClass, updateClass, deleteClass } = useTeacherClasses();
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TeacherClassInput>(emptyDraft);
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState(DEFAULT_SCHOOL_YEAR);
+  const [selectedSemester, setSelectedSemester] = useState<SemesterFilter>("All");
 
   const title = editingId ? "Edit Class" : "Add Class";
+  const availableSchoolYears = useMemo(
+    () => Array.from(new Set([DEFAULT_SCHOOL_YEAR, ...classes.map((item) => item.schoolYear)])).sort().reverse(),
+    [classes],
+  );
+
+  const filteredClasses = useMemo(
+    () =>
+      classes.filter(
+        (item) =>
+          item.schoolYear === selectedSchoolYear &&
+          (selectedSemester === "All" ? true : item.semester === selectedSemester),
+      ),
+    [classes, selectedSchoolYear, selectedSemester],
+  );
 
   const openCreate = () => {
     setEditingId(null);
@@ -35,6 +62,8 @@ export default function MyClasses() {
     setEditingId(classId);
     setDraft({
       name: current.name,
+      schoolYear: current.schoolYear,
+      semester: current.semester,
       gradeLevel: current.gradeLevel,
       section: current.section,
       subject: current.subject,
@@ -65,8 +94,8 @@ export default function MyClasses() {
   };
 
   const cardStats = useMemo(
-    () => classes.map((item) => ({ id: item.id, students: item.students.length })),
-    [classes],
+    () => filteredClasses.map((item) => ({ id: item.id, students: item.students.length })),
+    [filteredClasses],
   );
 
   return (
@@ -86,8 +115,58 @@ export default function MyClasses() {
         </button>
       </div>
 
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
+        <label className="space-y-2 text-sm text-slate-700">
+          <span className="block font-medium">School year</span>
+          <select
+            value={selectedSchoolYear}
+            onChange={(event) => setSelectedSchoolYear(event.target.value)}
+            className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+          >
+            {availableSchoolYears.map((schoolYear) => (
+              <option key={schoolYear} value={schoolYear}>
+                {schoolYear}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm text-slate-700">
+          <span className="block font-medium">Semester</span>
+          <select
+            value={selectedSemester}
+            onChange={(event) => setSelectedSemester(event.target.value as SemesterFilter)}
+            className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+          >
+            <option value="All">All Semesters</option>
+            {semesterOptions.map((semester) => (
+              <option key={semester} value={semester}>
+                {semester}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
+        <p>
+          Showing {filteredClasses.length} class{filteredClasses.length === 1 ? "" : "es"} for {selectedSchoolYear}
+          {selectedSemester === "All" ? "" : ` · ${selectedSemester}`}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedSchoolYear(DEFAULT_SCHOOL_YEAR);
+            setSelectedSemester("All");
+          }}
+          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        >
+          Reset filters
+        </button>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {classes.map((item, index) => {
+        {filteredClasses.map((item, index) => {
           const stats = cardStats.find((stat) => stat.id === item.id);
 
           return (
@@ -101,12 +180,18 @@ export default function MyClasses() {
                   </p>
                 </div>
 
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                  {stats?.students ?? 0} students
-                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                    {stats?.students ?? 0} students
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                    {item.semester}
+                  </span>
+                </div>
               </div>
 
               <div className="mt-4 grid gap-2 text-sm text-slate-600">
+                <div><span className="font-medium text-slate-700">School year:</span> {item.schoolYear}</div>
                 <div><span className="font-medium text-slate-700">Subject:</span> {item.subject}</div>
                 <div><span className="font-medium text-slate-700">Adviser:</span> {item.adviser}</div>
                 <div><span className="font-medium text-slate-700">Schedule:</span> {item.schedule}</div>
@@ -159,6 +244,8 @@ export default function MyClasses() {
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <Field label="Class name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
+              <Field label="School year" value={draft.schoolYear} onChange={(value) => setDraft((current) => ({ ...current, schoolYear: value }))} />
+              <FieldSelect label="Semester" value={draft.semester} onChange={(value) => setDraft((current) => ({ ...current, semester: value }))} options={semesterOptions} />
               <Field label="Grade level" value={draft.gradeLevel} onChange={(value) => setDraft((current) => ({ ...current, gradeLevel: value }))} />
               <Field label="Section" value={draft.section} onChange={(value) => setDraft((current) => ({ ...current, section: value }))} />
               <Field label="Subject" value={draft.subject} onChange={(value) => setDraft((current) => ({ ...current, subject: value }))} />
@@ -199,6 +286,35 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
       />
+    </label>
+  );
+}
+
+function FieldSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: Semester;
+  onChange: (value: Semester) => void;
+  options: Semester[];
+}) {
+  return (
+    <label className="space-y-2 text-sm text-slate-700">
+      <span className="block font-medium">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as Semester)}
+        className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

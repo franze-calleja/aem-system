@@ -19,6 +19,7 @@ const sections = [
   },
   {
     title: "Student risk view",
+    href: "/teacher/student-risk",
     description:
       "See which students need attention, with transparent factor explanations but without private counseling content.",
   },
@@ -32,6 +33,7 @@ const sections = [
 export default function TeacherWorkspace() {
   return (
     <RoleWorkspace
+      role="teacher"
       badge="Teacher workspace"
       title="Classroom operations dashboard"
       description="Track daily academic data, stay aware of at-risk students, and coordinate on interventions from the teacher side."

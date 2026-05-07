@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 
 export type AttendanceStatus = "present" | "absent" | "tardy" | "excused";
 export type AssessmentKind = "quiz" | "exam" | "pre-test" | "post-test";
+export type Semester = "1st Semester" | "2nd Semester" | "Summer";
+
+export const DEFAULT_SCHOOL_YEAR = "SY 2024-2025";
+export const DEFAULT_SEMESTER: Semester = "1st Semester";
 
 export type TeacherStudent = {
   id: string;
@@ -29,6 +33,8 @@ export type AssessmentColumn = {
 export type TeacherClass = {
   id: string;
   name: string;
+  schoolYear: string;
+  semester: Semester;
   gradeLevel: string;
   section: string;
   subject: string;
@@ -41,6 +47,8 @@ export type TeacherClass = {
 
 export type TeacherClassInput = {
   name: string;
+  schoolYear: string;
+  semester: Semester;
   gradeLevel: string;
   section: string;
   subject: string;
@@ -54,6 +62,8 @@ const defaultClasses: TeacherClass[] = [
   {
     id: "9-newton",
     name: "9-Newton",
+    schoolYear: DEFAULT_SCHOOL_YEAR,
+    semester: DEFAULT_SEMESTER,
     gradeLevel: "Grade 9",
     section: "Newton",
     subject: "Science",
@@ -71,6 +81,8 @@ const defaultClasses: TeacherClass[] = [
   {
     id: "10-pascal",
     name: "10-Pascal",
+    schoolYear: DEFAULT_SCHOOL_YEAR,
+    semester: DEFAULT_SEMESTER,
     gradeLevel: "Grade 10",
     section: "Pascal",
     subject: "Mathematics",
@@ -88,6 +100,8 @@ const defaultClasses: TeacherClass[] = [
   {
     id: "11-einstein",
     name: "11-Einstein",
+    schoolYear: DEFAULT_SCHOOL_YEAR,
+    semester: "2nd Semester",
     gradeLevel: "Grade 11",
     section: "Einstein",
     subject: "English",
@@ -255,6 +269,8 @@ function normalizeClass(rawClass: unknown): TeacherClass | null {
   return {
     id: candidate.id,
     name: candidate.name,
+    schoolYear: candidate.schoolYear ?? DEFAULT_SCHOOL_YEAR,
+    semester: candidate.semester ?? DEFAULT_SEMESTER,
     gradeLevel: candidate.gradeLevel,
     section: candidate.section,
     subject: candidate.subject,

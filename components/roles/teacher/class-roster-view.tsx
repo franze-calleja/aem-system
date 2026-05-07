@@ -7,6 +7,7 @@ import {
   type AttendanceStatus,
   useTeacherClasses,
 } from "@/components/roles/teacher/teacher-class-store";
+import { buildStudentRiskSummary, studentRiskHref } from "@/components/roles/teacher/student-risk-data";
 
 const ATTENDANCE_STATUSES: AttendanceStatus[] = ["present", "absent", "tardy", "excused"];
 const ASSESSMENT_KINDS: AssessmentKind[] = ["quiz", "exam", "pre-test", "post-test"];
@@ -178,6 +179,9 @@ export default function ClassRosterView({ classId }: { classId: string }) {
           <p className="mt-2 text-sm text-slate-600">
             {activeClass.gradeLevel} · {activeClass.section} · {activeClass.subject} · {activeClass.schedule}
           </p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            {activeClass.schoolYear} · {activeClass.semester}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -276,11 +280,28 @@ export default function ClassRosterView({ classId }: { classId: string }) {
               <tbody>
                 {activeClass.students.map((student) => {
                   const status = selectedDay?.statusByStudent[student.id] ?? "present";
+                  const risk = buildStudentRiskSummary(activeClass, student);
 
                   return (
                     <tr key={student.id} className="border-b border-slate-100 last:border-b-0">
                       <td className="px-4 py-4 align-top">
-                        <p className="text-sm font-medium text-slate-900">{student.name}</p>
+                        <Link
+                          href={studentRiskHref(activeClass.id, student.id)}
+                          className="inline-flex items-center gap-2 text-sm font-medium text-slate-900 hover:text-slate-700"
+                        >
+                          {student.name}
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                              risk.band === "High"
+                                ? "bg-rose-100 text-rose-700"
+                                : risk.band === "Moderate"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {risk.band} Risk
+                          </span>
+                        </Link>
                       </td>
                       <td className="px-4 py-4 align-top">
                         <div

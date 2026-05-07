@@ -32,6 +32,7 @@ const sections = [
 export default function PrincipalWorkspace() {
   return (
     <RoleWorkspace
+      role="principal"
       badge="Principal workspace"
       title="Oversight and decision dashboard"
       description="Monitor school-wide patterns, validate high-impact decisions, and keep governance visible across the system."

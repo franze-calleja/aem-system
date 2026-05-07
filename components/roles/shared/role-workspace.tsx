@@ -13,11 +13,15 @@ type WorkspaceMetric = {
 type WorkspaceSection = {
   title: string;
   description: string;
+  href?: string;
 };
 
 type ThemeName = "indigo" | "emerald" | "amber" | "rose";
 
+type RoleName = "admin" | "teacher" | "counselor" | "principal";
+
 type RoleWorkspaceProps = {
+  role: RoleName;
   badge: string;
   title: string;
   description: string;
@@ -55,6 +59,7 @@ const themeStyles = {
 } as const;
 
 export default function RoleWorkspace({
+  role,
   badge,
   title,
   description,
@@ -69,6 +74,7 @@ export default function RoleWorkspace({
     <SidebarProvider>
       <div className="flex min-h-screen bg-slate-50 text-slate-900">
         <RoleSidebar
+          role={role}
           badge={badge}
           title={title}
           schoolYear={schoolYear}
@@ -87,7 +93,6 @@ export default function RoleWorkspace({
                           {badge}
                         </div>
                     </div>
-                    <h1 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
                     <p className="mt-3 text-sm leading-6 text-slate-600 md:text-sm">{description}</p>
                   </div>
 
