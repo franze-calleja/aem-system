@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc; /* light slate */
+  --foreground: #0f1724; /* slate-900 */
 }
 
 @theme inline {
@@ -12,15 +12,38 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Shared form input utility */
+.input-field {
+  width: 100%;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+  outline: none;
+}
+.input-field:focus {
+  ring: 2px;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px #fde68a;
+}
+textarea.input-field {
+  height: auto;
+  padding: 0.5rem 0.75rem;
 }
