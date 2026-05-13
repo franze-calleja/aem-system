@@ -1,12 +1,12 @@
-import RoleWorkspace from "@/components/roles/shared/role-workspace";
+import type { NavSection, ThemeName } from "@/components/shell/role-shell";
 
-const metrics = [
-  { label: "Active school year", value: "SY 2024-2025" },
-  { label: "Governance scope", value: "System-wide" },
-  { label: "Core priority", value: "Audit and setup" },
-];
+export const ADMIN_BADGE = "Admin workspace";
+export const ADMIN_TITLE = "Administrative control center";
+export const ADMIN_DESCRIPTION =
+  "Manage school-year setup, user access, import pipelines, and governance settings without exposing counseling details.";
+export const ADMIN_THEME: ThemeName = "indigo";
 
-const sections = [
+export const ADMIN_NAV: NavSection[] = [
   {
     title: "User management",
     description:
@@ -29,16 +29,8 @@ const sections = [
   },
 ];
 
-export default async function AdminWorkspace() {
-  return (
-    <RoleWorkspace
-      role="admin"
-      badge="Admin workspace"
-      title="Administrative control center"
-      description="Manage school-year setup, user access, import pipelines, and governance settings without exposing counseling details."
-      theme="indigo"
-      metrics={metrics}
-      sections={sections}
-    />
-  );
-}
+export const ADMIN_METRICS = [
+  { label: "Governance scope", value: "System-wide" },
+  { label: "Sensitive access", value: "Metadata only" },
+  { label: "Core priority", value: "Audit and setup" },
+];

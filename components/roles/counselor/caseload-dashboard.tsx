@@ -192,7 +192,7 @@ export default function CaseloadDashboard() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Counselor</p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">Caseload Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">Urgent attention list — Moderate and High risk students, SY 2024-2025</p>
+        <p className="mt-1 text-sm text-slate-500">Urgent attention list — Moderate and High risk students for the active school year.</p>
       </div>
 
       {/* Summary row */}

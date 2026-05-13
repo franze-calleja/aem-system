@@ -97,6 +97,41 @@ A living checklist for building the AEM system. Mirrors the spec's 7-week roadma
 
 ---
 
+## Phase 1.5 — UI Alignment ✅ *(complete 2026-05-11)*
+
+**Goal:** Bring the scaffolded UI in line with Next 16 best practices and the spec's "year-scoped every analytical view" rule before adding Phase 2 features.
+
+### What changed
+- [x] New [components/shell/role-shell.tsx](components/shell/role-shell.tsx) — async server component that renders SidebarProvider + sidebar + sticky top bar (year switcher + logout + historical banner). Used by all role layouts.
+- [x] New [components/shell/role-overview.tsx](components/shell/role-overview.tsx) — role landing page content (title + description + metrics + nav cards). Used by 4 role landing pages.
+- [x] 4 new `app/{role}/layout.tsx` files — each calls `requireRole(...)` server-side (defense-in-depth on top of `proxy.ts`) and renders `<RoleShell>`.
+- [x] 4 role config modules (`components/roles/{role}/{role}-config.ts`) — single source of truth for each role's badge/title/description/theme/nav/metrics.
+- [x] 4 role landing pages slimmed to 12 lines each — just call `<RoleOverview>` with the role's config.
+- [x] 9 subpages stripped of duplicated `SidebarProvider + RoleSidebar + SidebarInset` boilerplate. Each is now 4-10 lines and renders only the page's own content.
+- [x] Deleted 5 obsolete files: `components/roles/shared/role-workspace.tsx` + 4 `components/roles/{role}/{role}-workspace.tsx`.
+- [x] Removed user-visible hardcoded "SY 2024-2025" string in `caseload-dashboard.tsx`.
+
+### What stayed
+- All localStorage stores (`teacher-class-store.ts`, `counselor-store.ts`) — they get replaced in Phase 2/3 as each feature wires to real APIs.
+- Logout's localStorage cleanup — needed until the stores are gone (cross-session data leak otherwise).
+- Hardcoded "SY 2024-2025" inside the localStorage stores — same; dies with the stores.
+- Visual design (Tailwind tokens, sidebar component, color themes).
+
+### Verified
+- [x] Typecheck — clean for all Phase 1.5 code. Pre-existing scaffolding errors in `teacher-class-store.ts` remain (out of scope).
+- [x] Smoke tests — teacher landing + 3 teacher subpages → 200. Counselor landing + 3 counselor subpages → 200. Admin landing → 200. Principal landing → 200.
+- [x] Cross-role denial — teacher → /counselor, /admin, /principal all return 307 → /?forbidden=1.
+- [x] Year Switcher renders on every role landing and every subpage (single source: the layout).
+- [x] Historical-year banner mechanism intact (toggles when active year ≠ current).
+
+### Phase 1.5 retrospective
+- **Postgres container had stopped** between sessions; volume `aem_pgdata` preserved all data so `docker compose up -d` brought everything back. Lesson: add a "Postgres still running?" check to the start of any session.
+- **Layouts replace 9 duplicated shells** — net code shrinkage of ~250 lines. Year Switcher and historical banner now propagate to every page automatically; no per-page maintenance.
+- **Defense-in-depth RBAC** — `proxy.ts` (edge) + `requireRole` in `app/{role}/layout.tsx` (page) is now in place. Third layer (Prisma extension for query-level) lands in Phase 2 when data-bearing endpoints arrive.
+- **Principal theme** corrected from `amber` (which clashed with counselor) to `rose`. Each role now has a distinct color.
+
+---
+
 ## Phase 2 — Data Capture & Import *(Week 2)*
 
 **Goal:** Teachers can record daily data; admin can bulk-import. All data is year-scoped and RBAC-respected.
