@@ -29,14 +29,13 @@ const sections = [
   },
 ];
 
-export default function PrincipalWorkspace() {
+export default async function PrincipalWorkspace() {
   return (
     <RoleWorkspace
       role="principal"
       badge="Principal workspace"
       title="Oversight and decision dashboard"
       description="Monitor school-wide patterns, validate high-impact decisions, and keep governance visible across the system."
-      schoolYear="SY 2024-2025"
       theme="amber"
       metrics={metrics}
       sections={sections}

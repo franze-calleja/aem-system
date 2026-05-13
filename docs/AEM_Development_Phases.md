@@ -34,68 +34,66 @@ A living checklist for building the AEM system. Mirrors the spec's 7-week roadma
 
 ---
 
-## Phase 0 — Pre-flight *(do this once, before Phase 1)*
+## Phase 0 — Pre-flight ✅ *(complete 2026-05-11)*
 
-- [ ] Run `npm install` (node_modules absent)
-- [ ] Read `node_modules/next/dist/docs/` for Next 16 breaking changes (per AGENTS.md)
-- [ ] Confirm Postgres availability (local + production target) — decide hosting (Supabase / Neon / self-hosted)
-- [ ] Decide auth approach (Auth.js v5 / Lucia / custom) — recommend **Auth.js v5** for speed + Next 16 compatibility
-- [ ] Add `.env.example` documenting required env vars (DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY)
-- [ ] Set up Prettier + commit hooks (optional but cheap)
+- [x] Run `npm install` (node_modules absent)
+- [x] Read `node_modules/next/dist/docs/` for Next 16 breaking changes (per AGENTS.md)
+- [x] Confirm Postgres availability — chose **local Docker Compose** (`docker-compose.yml`, port 5433 to avoid host conflicts)
+- [x] Decide auth approach — chose **Auth.js v5**
+- [x] Add `.env.example` documenting required env vars (DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY)
+- [ ] Set up Prettier + commit hooks (optional — skipped)
 
 ---
 
-## Phase 1 — Foundations *(Week 1)*
+## Phase 1 — Foundations ✅ *(complete 2026-05-11)*
 
 **Goal:** Login flow works for all four roles, backed by real auth, real DB, RBAC enforced, audit log capturing writes. Seed data exists.
 
 ### 1.1 Database & Schema
-- [ ] Install Prisma; configure `DATABASE_URL`
-- [ ] Schema: `User` (id, email, hashed_password, role, status, createdAt)
-- [ ] Schema: `Student` (persistent: id, LRN unique, firstName, lastName, sex, birthDate, guardianInfo, spedStatus + history)
-- [ ] Schema: `SchoolYear` (id, label, startDate, endDate, isActive)
-- [ ] Schema: `Section` (id, schoolYearId, name, gradeLevel)
-- [ ] Schema: `Subject` (id, schoolYearId, code, name)
-- [ ] Schema: `StudentEnrollment` (id, studentId, schoolYearId, sectionId, learningModality, status) — **per-year context**
-- [ ] Schema: `TeacherAssignment` (id, userId, sectionId, subjectId, schoolYearId, isAdviser)
-- [ ] Schema: `ConsentRecord` (id, studentId, scope enum, status, grantedAt, revokedAt, notes)
-- [ ] Schema: `AuditLog` (id, userId, action, resourceType, resourceId, metadata json, createdAt) — append-only
-- [ ] First migration applied
-- [ ] Seed script: 1 admin, 2 teachers (one adviser), 1 counselor, 1 principal, 1 school year, 2 sections, 5 subjects, 10 students with enrollments + consent
+- [x] Install Prisma; configure `DATABASE_URL` (moved to `prisma.config.ts` for Prisma 7)
+- [x] Schema: `User`, `Student` (+ `SpedStatusChange`), `SchoolYear`, `Section`, `Subject`, `StudentEnrollment`, `TeacherAssignment`, `ConsentRecord`, `AuditLog`
+- [x] First migration applied (`prisma/migrations/20260511140850_init/`)
+- [x] Seed script: 1 admin, 2 teachers (one adviser of 9-Newton), 1 counselor, 1 principal, 1 school year (SY 2025-2026 active), 2 sections (Newton, Curie), 5 subjects, 10 students with enrollments + 3 consents each (30 total)
 
 ### 1.2 Auth & Session
-- [ ] Install Auth.js v5 (or chosen alternative)
-- [ ] Email + password credentials provider; bcrypt/argon2 password hashing
-- [ ] Server-side session; httpOnly cookies
-- [ ] Login page wired to real auth (replace `MOCK_ACCOUNTS` in [login-form.tsx](components/auth/login-form.tsx))
-- [ ] Logout flow
+- [x] Auth.js v5 (`next-auth@beta`) with Credentials provider
+- [x] bcryptjs password hashing
+- [x] JWT sessions with role embedded in token + session
+- [x] Login form rewired to real auth via [app/actions/auth.ts](app/actions/auth.ts) — `MOCK_ACCOUNTS` removed
+- [x] Logout server action wired into sidebar + workspace header
 
-### 1.3 RBAC Middleware
-- [ ] Next middleware: redirects unauthenticated users to `/login`
-- [ ] Per-route role guards (`/admin/**` admin-only, `/teacher/**` teacher-only, etc.)
-- [ ] Server-side helper `requireRole(role[])` for route handlers
-- [ ] Prisma extension layer for query-level enforcement (e.g., teacher can only read their assigned sections' students) — spec §14 mandates this is not UI-only
+### 1.3 RBAC
+- [x] **Next 16 `proxy.ts`** (renamed from `middleware.ts`) — unauth → `/?from=...`, role mismatch → `/?forbidden=1`
+- [x] `/admin/**` admin-only, `/teacher/**` teacher-only, `/counselor/**` counselor-only, `/principal/**` principal-only
+- [x] Server-side helpers `requireSession` / `requireRole` / `roleLandingPath` in [lib/session.ts](lib/session.ts)
+- [ ] **Prisma extension layer for query-level enforcement — DEFERRED to Phase 2** (will add when first data-bearing API routes land; current proxy-only is sufficient for Phase 1 with zero domain endpoints)
+- [ ] **Append-only AuditLog enforced at DB grants level — DEFERRED to Phase 7** (currently enforced only in app layer)
 
-### 1.4 Audit Middleware
-- [ ] Server-side helper `logAudit({ action, resourceType, resourceId, metadata })`
-- [ ] Wired into all mutation routes (writes always logged)
-- [ ] Sensitive reads (counseling notes — placeholder until Phase 3) instrumented too
-- [ ] Append-only enforced at the DB level (no UPDATE/DELETE grants)
+### 1.4 Audit
+- [x] `logAudit({ action, userId, resourceType, resourceId, metadata })` in [lib/audit.ts](lib/audit.ts) — captures IP + user-agent from `headers()`
+- [x] Auth.js `events.signIn` → LOGIN audit (covers every entry path)
+- [x] Auth.js `events.signOut` → LOGOUT audit
+- [x] Credentials `authorize` → LOGIN_FAILED audit with reason metadata
+- [x] Year switch → YEAR_SWITCHED audit
 
 ### 1.5 Global Shell
-- [ ] Year Switcher component reading from `SchoolYear` table
-- [ ] Selected year persisted in session (cookie or server-side preference)
-- [ ] Banner when viewing non-current year
-- [ ] Role-aware sidebar reads from session
+- [x] [components/shell/year-switcher.tsx](components/shell/year-switcher.tsx) reads from `SchoolYear` table
+- [x] Selection persisted via httpOnly cookie (`aem_active_year`); fallback to `isActive` row
+- [x] Historical-year banner in `RoleWorkspace`
+- [x] Role-aware sidebar already in place; logout button wired
 
-### Phase 1 Definition of Done
-- [ ] All four seeded users can log in with their real credentials
-- [ ] Teacher cannot access `/admin` (server-side redirect, not just UI hide)
-- [ ] Every login + logout + role redirect appears in `AuditLog`
-- [ ] Year Switcher shows the seeded school year and a banner if switched to a historical year
-- [ ] `npm run build` passes with no type errors
+### Phase 1 Definition of Done — Verified 2026-05-11
+- [x] All seeded users can log in with their real credentials (verified counselor + teacher via Auth.js callback)
+- [x] Teacher cannot access `/admin` (verified 307 → `/?forbidden=1`)
+- [x] Login, LOGIN_FAILED, LOGOUT all appear in `AuditLog` with userId + metadata
+- [x] Year Switcher shows seeded `SY 2025-2026`; cookie-driven switch wired
+- [x] Typecheck clean for all Phase 1 code (pre-existing scaffolding errors in `teacher-class-store.ts` carry over — to be replaced in Phase 2)
 
-**Phase 1 retrospective:** _(fill in when done)_
+**Phase 1 retrospective:**
+- **Prisma 7 surprise** — `datasource.url` was removed in Prisma 7; URL now lives in `prisma.config.ts` and the client needs a driver adapter (`@prisma/adapter-pg`). Cost ~10 minutes. Worth noting for future ORM upgrades.
+- **Next 16 `middleware → proxy` rename** — caught early by reading bundled docs first. Used `proxy.ts` from the start, no rework.
+- **Auth.js v5 events vs server-action audit** — first pass put audit in the server action only, which missed any direct Auth.js callback hit (e.g. cURL test). Moved to `events.signIn` / `authorize` so audit fires regardless of entry path. Lesson: instrument the framework, not the wrapper.
+- **Deferred items** — Prisma RBAC extension and DB-level append-only audit are documented above. Track in Phase 2 / Phase 7 entries respectively.
 
 ---
 

@@ -29,14 +29,13 @@ const sections = [
   },
 ];
 
-export default function AdminWorkspace() {
+export default async function AdminWorkspace() {
   return (
     <RoleWorkspace
       role="admin"
       badge="Admin workspace"
       title="Administrative control center"
       description="Manage school-year setup, user access, import pipelines, and governance settings without exposing counseling details."
-      schoolYear="SY 2024-2025"
       theme="indigo"
       metrics={metrics}
       sections={sections}

@@ -21,14 +21,13 @@ const sections = [
   },
 ];
 
-export default function TeacherWorkspace() {
+export default async function TeacherWorkspace() {
   return (
     <RoleWorkspace
       role="teacher"
       badge="Teacher workspace"
       title="Classroom operations dashboard"
       description="Track daily academic data, stay aware of at-risk students, and coordinate on interventions from the teacher side."
-      schoolYear="SY 2024-2025"
       theme="emerald"
       metrics={metrics}
       sections={sections}

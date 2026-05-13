@@ -27,14 +27,13 @@ const sections = [
   },
 ];
 
-export default function CounselorWorkspace() {
+export default async function CounselorWorkspace() {
   return (
     <RoleWorkspace
       role="counselor"
       badge="Counselor workspace"
       title="Student support and intervention hub"
       description="Own the intervention lifecycle, maintain counseling context, and act on risk signals with accountable human decisions."
-      schoolYear="SY 2024-2025"
       theme="amber"
       metrics={metrics}
       sections={sections}

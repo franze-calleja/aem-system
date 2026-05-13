@@ -1,9 +1,11 @@
-import Link from "next/link";
 import RoleSidebar from "@/components/roles/shared/role-sidebar";
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
+import { getAllSchoolYears, getActiveSchoolYear } from "@/lib/active-year";
+import YearSwitcher from "@/components/shell/year-switcher";
+import LogoutButton from "@/components/shell/logout-button";
 
 type WorkspaceMetric = {
   label: string;
@@ -25,7 +27,6 @@ type RoleWorkspaceProps = {
   badge: string;
   title: string;
   description: string;
-  schoolYear: string;
   theme: ThemeName;
   metrics: WorkspaceMetric[];
   sections: WorkspaceSection[];
@@ -58,17 +59,23 @@ const themeStyles = {
   },
 } as const;
 
-export default function RoleWorkspace({
+export default async function RoleWorkspace({
   role,
   badge,
   title,
   description,
-  schoolYear,
   theme,
   metrics,
   sections,
 }: RoleWorkspaceProps) {
   const styles = themeStyles[theme];
+
+  const [years, activeYear] = await Promise.all([
+    getAllSchoolYears(),
+    getActiveSchoolYear(),
+  ]);
+  const schoolYear = activeYear?.label ?? "No school year";
+  const viewingHistorical = activeYear ? !activeYear.isActive : false;
 
   return (
     <SidebarProvider>
@@ -97,17 +104,18 @@ export default function RoleWorkspace({
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-600">
-                      {schoolYear}
-                    </div>
-                    <Link
-                      href="/"
-                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Switch role
-                    </Link>
+                    <YearSwitcher
+                      years={years.map((y) => ({ id: y.id, label: y.label, isActive: y.isActive }))}
+                      selectedId={activeYear?.id ?? null}
+                    />
+                    <LogoutButton />
                   </div>
                 </div>
+                {viewingHistorical && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
+                    Viewing historical data: {schoolYear}. Switch to the current school year to make changes.
+                  </div>
+                )}
               </header>
 
               <section className="grid gap-4 md:grid-cols-3">

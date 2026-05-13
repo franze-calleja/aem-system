@@ -1,0 +1,258 @@
+// AEM System — Phase 1 schema
+// Covers: persistent identity, per-year enrollment context, consent, audit.
+// Later phases add: Grade, Attendance, BehavioralRecord, SELAssessment,
+// CounselingNote, Intervention*, RiskAssessment, PatternMatch, RecommendationDraft.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Connection URL is configured in prisma.config.ts (Prisma 7 change).
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  COUNSELOR
+  PRINCIPAL
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum SpedStatus {
+  NONE
+  IEP
+  ACCOMMODATIONS
+}
+
+enum LearningModality {
+  FACE_TO_FACE
+  MODULAR
+  ONLINE
+  BLENDED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  TRANSFERRED
+  DROPPED
+  GRADUATED
+}
+
+enum ConsentScope {
+  DATA_PROCESSING
+  AI_ANALYSIS
+  INTERVENTION_PLANNING
+}
+
+enum ConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+enum AuditAction {
+  // Auth
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  // Generic resource lifecycle
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  // Sensitive specifics (extended in later phases)
+  CONSENT_GRANTED
+  CONSENT_REVOKED
+  IMPORT
+  RISK_OVERRIDE
+  INTERVENTION_APPROVED
+  INTERVENTION_REVISED
+  INTERIM_REVISION
+  YEAR_SWITCHED
+}
+
+// ─── Identity & Auth ────────────────────────────────────────────────────────
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  hashedPassword String
+  role           Role
+  status         UserStatus @default(ACTIVE)
+  name           String
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  teacherAssignments TeacherAssignment[]
+  auditLogs          AuditLog[]
+
+  @@index([role])
+}
+
+// ─── School Year & Org ──────────────────────────────────────────────────────
+
+model SchoolYear {
+  id        String   @id @default(cuid())
+  label     String   @unique // e.g. "SY 2025-2026"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false) // exactly one row should be true; enforced at app layer
+
+  sections            Section[]
+  subjects            Subject[]
+  enrollments         StudentEnrollment[]
+  teacherAssignments  TeacherAssignment[]
+
+  @@index([isActive])
+}
+
+model Section {
+  id           String     @id @default(cuid())
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  name         String // e.g. "Newton"
+  gradeLevel   String // e.g. "Grade 9" — string keeps PH naming flexible
+
+  enrollments         StudentEnrollment[]
+  teacherAssignments  TeacherAssignment[]
+
+  @@unique([schoolYearId, gradeLevel, name])
+  @@index([schoolYearId])
+}
+
+model Subject {
+  id           String     @id @default(cuid())
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  code         String // e.g. "MATH9"
+  name         String
+
+  teacherAssignments TeacherAssignment[]
+
+  @@unique([schoolYearId, code])
+  @@index([schoolYearId])
+}
+
+// Per-year link of a teacher to a section + subject. Also captures adviser elevation.
+model TeacherAssignment {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sectionId    String
+  section      Section    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  // Adviser rows have no subject (subjectId null); teaching rows must have one.
+  subjectId    String?
+  subject      Subject?   @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  schoolYearId String
+  schoolYear   SchoolYear @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  isAdviser    Boolean    @default(false)
+
+  @@unique([userId, sectionId, subjectId, schoolYearId])
+  @@index([sectionId])
+  @@index([userId])
+}
+
+// ─── Student: persistent identity + per-year enrollment ─────────────────────
+
+model Student {
+  id           String     @id @default(cuid())
+  lrn          String     @unique // PH Learner Reference Number
+  firstName    String
+  lastName     String
+  middleName   String?
+  sex          Sex
+  birthDate    DateTime
+  guardianName String?
+  guardianContact String?
+  spedStatus   SpedStatus @default(NONE)
+  // SPED status changes are versioned via SpedStatusChange below.
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  enrollments      StudentEnrollment[]
+  consentRecords   ConsentRecord[]
+  spedStatusHistory SpedStatusChange[]
+
+  @@index([lastName, firstName])
+}
+
+model SpedStatusChange {
+  id          String     @id @default(cuid())
+  studentId   String
+  student     Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fromStatus  SpedStatus
+  toStatus    SpedStatus
+  effectiveAt DateTime
+  changedById String? // optional — may be system import
+  notes       String?
+
+  @@index([studentId])
+}
+
+model StudentEnrollment {
+  id              String           @id @default(cuid())
+  studentId       String
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  schoolYearId    String
+  schoolYear      SchoolYear       @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  sectionId       String
+  section         Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  gradeLevel      String // denormalized for fast filters; should match section.gradeLevel
+  learningModality LearningModality @default(FACE_TO_FACE)
+  status          EnrollmentStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([studentId, schoolYearId])
+  @@index([sectionId])
+  @@index([schoolYearId])
+}
+
+// ─── Consent ────────────────────────────────────────────────────────────────
+
+model ConsentRecord {
+  id         String        @id @default(cuid())
+  studentId  String
+  student    Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  scope      ConsentScope
+  status     ConsentStatus @default(GRANTED)
+  grantedAt  DateTime      @default(now())
+  revokedAt  DateTime?
+  notes      String?
+
+  @@unique([studentId, scope])
+  @@index([studentId])
+}
+
+// ─── Audit ──────────────────────────────────────────────────────────────────
+// Append-only. App layer must never UPDATE or DELETE these.
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action       AuditAction
+  resourceType String?
+  resourceId   String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([action])
+  @@index([createdAt])
+}
