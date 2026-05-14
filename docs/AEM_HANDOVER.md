@@ -1,7 +1,7 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-14 (Phases 2.5 + 4 complete; Phase 3.1 schema + 3.2 counseling notes shipped)
-**Next session starts at:** Phase 3.3 — Intervention Builder (counselor creates Individual/Section/Grade/School interventions; section+ go through approval)
+**Last session ended:** 2026-05-14 (Phases 2.5 + 4 complete; Phase 3.1 schema + 3.2 counseling notes + 3.3 intervention builder shipped — builder is counselor-side only, approval center is next)
+**Next session starts at:** Phase 3.4 — Principal Approval Center (list PENDING_APPROVAL interventions; approve → status ACTIVE + audit INTERVENTION_APPROVED; reject → status CANCELLED + reason in InterventionRevision + audit INTERVENTION_REVISED)
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

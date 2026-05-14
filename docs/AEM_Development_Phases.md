@@ -467,13 +467,17 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [~] Schema: `InterventionSession` — **dropped** in favour of `InterventionNote(OBSERVATION)`. See deviation note in 3.1.
 
 ### 3.4 Intervention Builder & Workflow
-- [ ] Counselor → Intervention Builder wired to real API (replace [counselor-store.ts](components/roles/counselor/counselor-store.ts) localStorage)
-- [ ] Scope picker (Individual / Section / Grade / School-Wide)
-- [ ] Public vs sensitive field separation enforced server-side
-- [ ] Individual scope: save → activate directly
-- [ ] Broader scopes: save → status = pending approval
-- [ ] Principal → Approval Center wired to real API
-- [ ] Approval action: status → active; rejection records reason
+- [x] Counselor → Intervention Builder wired to real API ([app/counselor/interventions/new/page.tsx](app/counselor/interventions/new/page.tsx) + [components/counselor/intervention-builder-form.tsx](components/counselor/intervention-builder-form.tsx))
+- [x] Scope picker (Individual / Section / Grade / School-Wide) with scope-conditional target dropdowns
+- [x] Public vs sensitive field separation enforced server-side ([lib/intervention/queries.ts](lib/intervention/queries.ts) `getIntervention` strips `sensitive` for non-owner non-principal)
+- [x] Individual scope: save → activate directly (audit: INTERVENTION_CREATED + INTERVENTION_ACTIVATED)
+- [x] Broader scopes: save → status = PENDING_APPROVAL (audit: INTERVENTION_CREATED only)
+- [x] Counselor intervention list page ([app/counselor/interventions/page.tsx](app/counselor/interventions/page.tsx)) shows scope, type, status, owner, dates + Open Recommendations queue
+- [x] Intervention detail page ([app/counselor/interventions/[id]/page.tsx](app/counselor/interventions/[id]/page.tsx)) renders public fields always, sensitive panel only when policy allows, participants list
+- [x] "Open in Builder" link on a recommendation prefills the form via `?fromRecommendation=<id>`; on save the draft transitions to INSTANTIATED
+- [x] Verification script: [scripts/verify-interventions.ts](scripts/verify-interventions.ts) — exercises all four scopes + the draft-instantiation path; confirms participation counts (1 / 15 / 20 / 20) and audit rows
+- [ ] Principal → Approval Center wired to real API — **deferred to Phase 3.4 next slice**
+- [ ] Approval action: status → active; rejection records reason — **deferred to Phase 3.4 next slice**
 
 ### 3.5 Feedback & Revision Workflow
 - [ ] Teacher → Intervention View: Log Session, Submit Observation, Submit Revision Request, Submit Outcome Observation
