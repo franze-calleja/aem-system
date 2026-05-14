@@ -14,9 +14,6 @@ export default function LogoutButton() {
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          // Counselor still uses localStorage scaffolding — clear on logout to avoid cross-session leak.
-          // Removed in Phase 2d when the counselor-store is deleted.
-          window.localStorage.removeItem("aem-counselor-data");
           await logoutAction();
           router.refresh();
         })

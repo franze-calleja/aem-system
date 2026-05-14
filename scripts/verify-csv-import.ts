@@ -4,11 +4,7 @@
 
 import "dotenv/config";
 import fs from "node:fs";
-import {
-  PrismaClient,
-  ConsentScope,
-  type Prisma,
-} from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { parseCsv } from "../lib/import/csv";
 import { validateRosterCsv } from "../lib/import/roster";

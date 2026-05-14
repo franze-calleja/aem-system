@@ -5,7 +5,7 @@ export default function TeacherStudentRiskPage() {
       <p className="mt-2 text-sm text-slate-600">
         Risk classifications and explainability panels arrive in Phase 4 (Algorithmic Engine).
         Right now teacher data is being captured (Phase 2). Once enough data exists, this page
-        will show every student's risk band with the factors that contributed.
+        will show every student&apos;s risk band with the factors that contributed.
       </p>
     </div>
   );

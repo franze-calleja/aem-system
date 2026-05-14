@@ -272,6 +272,78 @@ A living checklist for building the AEM system. Mirrors the spec's 7-week roadma
 
 ---
 
+## Phase 2d — Counselor + Principal Student Profile ✅ *(complete 2026-05-14)*
+
+**Goal:** Close Phase 2 by giving the Counselor and Principal a read-only, DB-backed Student Profile + a Caseload listing. Replaces ~2,480 LOC of counselor localStorage scaffolding.
+
+### Query helpers (read-only, server-only)
+- [x] [lib/student/queries.ts](lib/student/queries.ts):
+  - `getCaseload(schoolYearId)` — all active enrollments + computed absence/tardy/behavioral counts in one round-trip per relation
+  - `getStudentProfile(studentId, schoolYearId)` — student + enrollment + consents + grades + attendance + behavioral, with derived stats (per-quarter GWA, per-subject quarterly averages, absence/tardy rates)
+- Stats are computed on the fly from the raw rows; no caching, no separate aggregation table needed for Phase 2.
+
+### Shared profile UI
+- [x] [components/shell/student-profile-view.tsx](components/shell/student-profile-view.tsx) — server component taking `profile` + `viewerRole`. Renders header, consent badges, snapshot stats, academic table with **inline SVG sparkline trend lines**, attendance heatmap (date-grid colored by status), behavioral timeline. Anchor-link nav instead of tabs (no client JS needed).
+- Counseling Notes and Risk Profile sections appear as **disabled chips** linking to Phase 3 / Phase 4 respectively — visible reminder of what's coming, no dead UI.
+
+### Pages built / rewritten
+- [x] [app/counselor/caseload/page.tsx](app/counselor/caseload/page.tsx) — DB-backed table, sorted by a manual urgency signal (absence × 60 + tardy × 20 + behavioral × 8) until the Phase 4 risk engine ships
+- [x] [app/counselor/students/[id]/page.tsx](app/counselor/students/%5Bid%5D/page.tsx) — calls `requireRole("COUNSELOR")`, fetches profile, renders shared view
+- [x] [app/principal/students/page.tsx](app/principal/students/page.tsx) — new oversight roster (read-only)
+- [x] [app/principal/students/[id]/page.tsx](app/principal/students/%5Bid%5D/page.tsx) — same shared profile view, principal role
+- [x] [app/counselor/interventions/page.tsx](app/counselor/interventions/page.tsx) → Phase 3 stub
+- [x] [app/counselor/feedback/page.tsx](app/counselor/feedback/page.tsx) → Phase 3 stub
+- [x] Principal nav config gains a "Students" entry pointing to `/principal/students`
+
+### Deleted (~2,480 LOC of Phase 0 counselor scaffolding)
+- `components/roles/counselor/counselor-store.ts` (614 lines, localStorage state engine)
+- `components/roles/counselor/student-profile.tsx` (738 lines)
+- `components/roles/counselor/caseload-dashboard.tsx` (289 lines)
+- `components/roles/counselor/intervention-builder.tsx` (572 lines)
+- `components/roles/counselor/feedback-queue.tsx` (233 lines)
+- **All `localStorage` cleanup removed from `LogoutButton` and `RoleSidebar`** — no more Phase 0 state engines anywhere in the codebase
+
+### Phase 2d Definition of Done — Verified 2026-05-14
+- [x] Counselor opens Maria's profile from caseload → sees real Math decline (85 → 72 sparkline), Science 88, English 80, full attendance heatmap, two behavioral incidents
+- [x] Principal opens the same profile via `/principal/students/[id]` → same view, role-aware copy
+- [x] Teacher hitting `/counselor/students/[id]` or `/principal/students/[id]` → 307 → `/?forbidden=1` at proxy layer; defense-in-depth `requireRole` at layout
+- [x] All four roles' routes return 200 on their own pages, including new Phase 3 stubs
+- [x] Caseload sorts by manual urgency signal; Maria appears near the top thanks to her attendance + behavioral data
+- [x] **Typecheck clean across the entire codebase** — the pre-existing scaffolding error category is fully eliminated
+- [x] **No `localStorage`, no hardcoded `SY 2024-2025`, no mock account list anywhere in `app/`, `components/`, or `lib/`** — verified by grep
+- [x] Counseling notes & risk profile are visibly *labeled* as upcoming, not silently missing
+
+### Phase 2d retrospective
+- **Shared component, two routes.** `StudentProfileView` takes a `viewerRole` prop but the visible difference is tiny in Phase 2 (no counseling note bodies yet). That seam is in place for Phase 3 when notes ship — only the counselor variant will render them.
+- **No tabs.** Existing UI had four tabs; we replaced them with anchor-link nav. For a read-only profile, scrolling beats client JS. The Phase 2c teacher view kept tabs because it has interactive forms — different concern, different choice.
+- **Manual urgency signal in the caseload** is documented as a stop-gap. Counselors get *some* prioritization today; Phase 4 replaces it with the proper weighted risk score.
+- **End of Phase 0 localStorage era.** Every line of `localStorage` for domain data is gone. Logout no longer mentions client storage. This is the cleanest the codebase has been since project start.
+
+---
+
+## Phase 2 — Complete ✅
+
+All four sub-phases shipped. Definition of Done from the original Phase 2 plan:
+
+- [x] Teacher logs attendance + grades that persist to DB and survive refresh *(2c)*
+- [x] Admin imports a 240-row roster CSV (with intentional errors) and the wizard reports them with row numbers *(2a)*
+- [x] Imported data appears immediately in teacher views *(2c)*
+- [x] Counselor sees Maria's academic trend line chart from imported data *(2d — sparkline showing Math 85 → 72)*
+- [x] All writes appear in `AuditLog` *(IMPORT, ATTENDANCE_RECORDED, GRADE_RECORDED, BEHAVIORAL_INCIDENT_RECORDED, LOGIN, LOGOUT, YEAR_SWITCHED)*
+
+**Total work removed:** ~5,280 LOC of Phase 0 localStorage scaffolding (teacher + counselor stores plus dependent components).
+**Total work added:** Schema for Grade / Attendance / BehavioralRecord, full Import Wizard pipeline, DB-backed teacher daily UI, DB-backed counselor + principal profile views, query-layer RBAC helper, four CSV validators, three teacher server actions.
+
+Reference scenario coverage:
+- Scene 0 — Setup, import, consent ✅
+- Scene 1 — Daily data capture (teacher routine) ✅
+- Scene 2 — Algorithmic surfacing → **Phase 4**
+- Scenes 3-12 — Intervention lifecycle → **Phase 3+**
+
+Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), depending on which the user prioritizes.
+
+---
+
 ## Phase 2 — Data Capture & Import *(Week 2)*
 
 **Goal:** Teachers can record daily data; admin can bulk-import. All data is year-scoped and RBAC-respected.

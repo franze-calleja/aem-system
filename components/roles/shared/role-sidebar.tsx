@@ -113,10 +113,6 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
 
   const handleLogout = () => {
     startTransition(async () => {
-      // Clear legacy localStorage scaffolding (will be removed in later phases).
-      // Counselor still uses localStorage scaffolding — clear on logout to avoid cross-session leak.
-      // Removed in Phase 2d when the counselor-store is deleted.
-      window.localStorage.removeItem("aem-counselor-data");
       await logoutAction();
       router.refresh();
     });
@@ -136,7 +132,7 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
 
       return pathname === path || pathname.startsWith(`${path}/`);
     },
-    [hash, pathname],
+    [hash, pathname, homeHref],
   );
 
   return (

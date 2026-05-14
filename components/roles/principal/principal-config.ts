@@ -8,6 +8,12 @@ export const PRINCIPAL_THEME: ThemeName = "rose";
 
 export const PRINCIPAL_NAV: NavSection[] = [
   {
+    title: "Students",
+    href: "/principal/students",
+    description:
+      "Read-only oversight of all enrolled students — academic, attendance, and behavioral records (counseling note bodies remain private).",
+  },
+  {
     title: "School dashboard",
     description:
       "Review risk distribution across grade levels, sections, and learner groups with drill-down visibility.",

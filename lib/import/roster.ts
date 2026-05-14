@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type { LearningModality, Sex, SpedStatus } from "@prisma/client";
 import { type ParsedCsv, summarize, type ValidatedRow, type ValidationResult } from "@/lib/import/csv";
 
@@ -37,17 +36,6 @@ export type RosterRow = {
   learningModality: LearningModality;
   spedStatus: SpedStatus;
 };
-
-const sexSchema = z.union([z.literal("MALE"), z.literal("FEMALE"), z.literal("M"), z.literal("F"), z.literal("Male"), z.literal("Female")]);
-const modalitySchema = z.union([
-  z.literal("FACE_TO_FACE"),
-  z.literal("MODULAR"),
-  z.literal("ONLINE"),
-  z.literal("BLENDED"),
-  z.literal("Face-to-face"),
-  z.literal("face-to-face"),
-]);
-const spedSchema = z.union([z.literal("NONE"), z.literal("IEP"), z.literal("ACCOMMODATIONS"), z.literal("none"), z.literal("iep"), z.literal("accommodations")]);
 
 function normalizeSex(v: string): Sex | null {
   const x = v.trim().toUpperCase();
