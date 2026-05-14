@@ -8,6 +8,12 @@ export const ADMIN_THEME: ThemeName = "indigo";
 
 export const ADMIN_NAV: NavSection[] = [
   {
+    title: "Import wizard",
+    href: "/admin/import",
+    description:
+      "Load student rosters, grades, attendance, behavioral records, and historical interventions per school year.",
+  },
+  {
     title: "User management",
     description:
       "Create staff accounts, suspend access, reset passwords, and keep role assignments aligned with school operations.",
@@ -16,11 +22,6 @@ export const ADMIN_NAV: NavSection[] = [
     title: "Consent and audit",
     description:
       "Review consent records, process revocations, and inspect append-only audit trails for sensitive actions.",
-  },
-  {
-    title: "Import wizard",
-    description:
-      "Load student rosters, grades, attendance, behavioral records, and historical interventions per school year.",
   },
   {
     title: "System configuration",

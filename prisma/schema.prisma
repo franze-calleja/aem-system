@@ -1,7 +1,8 @@
-// AEM System — Phase 1 schema
-// Covers: persistent identity, per-year enrollment context, consent, audit.
-// Later phases add: Grade, Attendance, BehavioralRecord, SELAssessment,
-// CounselingNote, Intervention*, RiskAssessment, PatternMatch, RecommendationDraft.
+// AEM System — Phase 2a schema
+// Covers: persistent identity, per-year enrollment context, consent, audit,
+// grades, attendance, behavioral records.
+// Later phases add: SELAssessment, CounselingNote, Intervention*,
+// RiskAssessment, PatternMatch, RecommendationDraft.
 
 generator client {
   provider = "prisma-client-js"
@@ -62,6 +63,34 @@ enum ConsentStatus {
   REVOKED
 }
 
+enum AssessmentKind {
+  REGULAR
+  QUIZ
+  PERIODICAL
+  PRE_TEST
+  POST_TEST
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  TARDY
+  EXCUSED
+}
+
+enum BehaviorCategory {
+  ACADEMIC
+  ATTENDANCE_RELATED
+  BEHAVIORAL
+  SOCIAL_EMOTIONAL
+}
+
+enum BehaviorSeverity {
+  LOW
+  MODERATE
+  HIGH
+}
+
 enum AuditAction {
   // Auth
   LOGIN
@@ -76,6 +105,9 @@ enum AuditAction {
   CONSENT_GRANTED
   CONSENT_REVOKED
   IMPORT
+  GRADE_RECORDED
+  ATTENDANCE_RECORDED
+  BEHAVIORAL_INCIDENT_RECORDED
   RISK_OVERRIDE
   INTERVENTION_APPROVED
   INTERVENTION_REVISED
@@ -95,8 +127,11 @@ model User {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  teacherAssignments TeacherAssignment[]
-  auditLogs          AuditLog[]
+  teacherAssignments  TeacherAssignment[]
+  auditLogs           AuditLog[]
+  recordedGrades      Grade[]
+  recordedAttendance  Attendance[]
+  recordedBehavioral  BehavioralRecord[]
 
   @@index([role])
 }
@@ -140,6 +175,7 @@ model Subject {
   name         String
 
   teacherAssignments TeacherAssignment[]
+  grades             Grade[]
 
   @@unique([schoolYearId, code])
   @@index([schoolYearId])
@@ -215,9 +251,70 @@ model StudentEnrollment {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  grades            Grade[]
+  attendance        Attendance[]
+  behavioralRecords BehavioralRecord[]
+
   @@unique([studentId, schoolYearId])
   @@index([sectionId])
   @@index([schoolYearId])
+}
+
+// ─── Academic / Attendance / Behavioral ─────────────────────────────────────
+
+model Grade {
+  id             String         @id @default(cuid())
+  enrollmentId   String
+  enrollment     StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  quarter        Int // 1..4
+  score          Float
+  maxScore       Float
+  assessmentKind AssessmentKind @default(REGULAR)
+  label          String? // e.g. "Q1 Quiz 2"; nullable for plain quarterly score
+  recordedById   String?
+  recordedBy     User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedAt     DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([enrollmentId])
+  @@index([subjectId])
+  @@index([enrollmentId, subjectId, quarter])
+}
+
+model Attendance {
+  id           String           @id @default(cuid())
+  enrollmentId String
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  date         DateTime // date only (UTC midnight)
+  status       AttendanceStatus
+  notes        String?
+  recordedById String?
+  recordedBy   User?            @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedAt   DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([enrollmentId, date])
+  @@index([enrollmentId])
+  @@index([date])
+}
+
+model BehavioralRecord {
+  id           String            @id @default(cuid())
+  enrollmentId String
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  date         DateTime
+  category     BehaviorCategory
+  severity     BehaviorSeverity
+  description  String
+  recordedById String?
+  recordedBy   User?             @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedAt   DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([enrollmentId])
+  @@index([date])
 }
 
 // ─── Consent ────────────────────────────────────────────────────────────────

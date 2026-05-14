@@ -132,6 +132,92 @@ A living checklist for building the AEM system. Mirrors the spec's 7-week roadma
 
 ---
 
+## Phase 2a — Schema + RBAC + Roster Import ✅ *(complete 2026-05-13)*
+
+**Goal:** Get the foundational data layer in place (Grade/Attendance/BehavioralRecord models), enforce RBAC at the query layer, and stand up the Import Wizard with a working roster step.
+
+### Schema
+- [x] `Grade` (enrollmentId, subjectId, quarter, score, maxScore, assessmentKind, label, recordedBy, timestamps)
+- [x] `Attendance` (enrollmentId, date, status, notes, recordedBy, timestamps) — `@@unique([enrollmentId, date])`
+- [x] `BehavioralRecord` (enrollmentId, date, category, severity, description, recordedBy, timestamps)
+- [x] New enums: `AssessmentKind`, `AttendanceStatus`, `BehaviorCategory`, `BehaviorSeverity`
+- [x] New audit actions: `GRADE_RECORDED`, `ATTENDANCE_RECORDED`, `BEHAVIORAL_INCIDENT_RECORDED`
+- [x] Migration `20260513145558_add_grade_attendance_behavioral` applied
+
+### RBAC at the query layer
+- [x] `studentVisibilityFilter(caller, schoolYearId)` in [lib/rbac.ts](lib/rbac.ts)
+- [x] `enrollmentVisibilityFilter(caller, schoolYearId)` for Grade/Attendance/Behavioral
+- [x] `canReadCounselingContent(role)` placeholder for Phase 3
+- [x] Verified by [scripts/verify-rbac-scope.ts](scripts/verify-rbac-scope.ts):
+  - ADMIN / COUNSELOR / PRINCIPAL → all 20 students (both sections)
+  - TEACHER (Newton Math) → 15 students (Newton only)
+  - SECTION ADVISER (Newton English + adviser) → 15 students (Newton only)
+
+### CSV pipeline
+- [x] `csv-parse` installed
+- [x] [lib/import/csv.ts](lib/import/csv.ts) — parser + `ValidationResult<T>` helpers
+- [x] [lib/import/roster.ts](lib/import/roster.ts) — required/optional column spec + Zod-style row validation with row-number tracking
+
+### Import Wizard (admin only)
+- [x] Route `/admin/import` with stepper UI
+- [x] Step 1 — school year picker (defaults to active year)
+- [x] Step 2 — Roster CSV: file upload → preview (first 20 valid rows) → error report with row numbers → transactional commit (full success or full rollback)
+- [x] Steps 3-5 stubs (Grades / Attendance / Behavioral) — labeled "ships in 2b"
+- [x] Server actions [app/actions/import/roster.ts](app/actions/import/roster.ts) with `requireRole("ADMIN")` + `logAudit({ action: IMPORT, ... })` + `prisma.$transaction` covering Section upserts, Student upserts, Enrollment upserts, three Consent records each
+- [x] Admin sidebar nav updated to link to Import Wizard
+
+### Phase 2a Definition of Done — Verified 2026-05-13
+- [x] Validator catches: bad LRN length, missing firstName, malformed birthDate, invalid sex — all with correct row numbers (`scripts/verify-roster-import.ts /tmp/aem-roster-test.csv` reported 4 invalid out of 14)
+- [x] Clean CSV commits successfully — 10 new students + 10 enrollments + 30 consents, Newton section reused (not duplicated)
+- [x] Existing data preserved — original seed students still present (20 total after import = 10 seed + 10 import)
+- [x] Admin can access `/admin/import` (200); teacher cannot (307 → `/?forbidden=1`)
+- [x] Typecheck clean for all Phase 2a code (only pre-existing `teacher-class-store.ts` errors remain — die in 2c)
+
+### Phase 2a retrospective
+- **Prisma RBAC: helper > magic extension.** Considered `$extends({ query: ... })` to globally intercept all student queries. Went with explicit `studentVisibilityFilter()` instead — easier to debug, easier to read, callers must opt in. If a future query forgets it we'd want a code-review check (or move to extension later). YAGNI for now.
+- **Server-action testability gap.** Server actions need real request context (auth cookies), so end-to-end commits via curl is a multi-hour project. Wrote `scripts/verify-roster-import.ts` to exercise the validator + transactional upsert logic directly (same code paths) and `scripts/verify-rbac-scope.ts` to verify the RBAC helper across all roles. UI audit firing requires a real browser commit — explicitly documented.
+- **Existing `Newton` section** from the Phase 1 seed had `students: 5`; import added 10 more without re-creating it. The `sectionsCreated=0, enrollmentsCreated=10` result confirms idempotent section upsert.
+
+---
+
+## Phase 2b — Import Wizard Steps 3-5 ✅ *(complete 2026-05-13)*
+
+**Goal:** Complete the bulk-import pipeline with Grades, Attendance, and Behavioral CSV steps, all sharing the same validate → preview → transactional commit pattern as Step 2 (Roster).
+
+### Validators (pure, table-tested)
+- [x] [lib/import/grades.ts](lib/import/grades.ts) — LRN→enrollment lookup, subjectCode→subject lookup, quarter range check, score ≤ maxScore enforcement, normalized `AssessmentKind` enum
+- [x] [lib/import/attendance.ts](lib/import/attendance.ts) — LRN→enrollment lookup, multi-format date parsing, `AttendanceStatus` normalization (accepts P/A/T/E shorthand), in-file duplicate detection for (LRN, date)
+- [x] [lib/import/behavioral.ts](lib/import/behavioral.ts) — LRN→enrollment lookup, `BehaviorCategory` + `BehaviorSeverity` enum normalization, description-required check
+
+### Server actions (RBAC + audit + transactional)
+- [x] [app/actions/import/grades.ts](app/actions/import/grades.ts) — `previewGradesAction`, `commitGradesAction` (creates Grade rows; logs `IMPORT` audit with resourceType `Grades`)
+- [x] [app/actions/import/attendance.ts](app/actions/import/attendance.ts) — `previewAttendanceAction`, `commitAttendanceAction` (upserts Attendance by `[enrollmentId, date]`; logs `IMPORT` audit with resourceType `Attendance`)
+- [x] [app/actions/import/behavioral.ts](app/actions/import/behavioral.ts) — `previewBehavioralAction`, `commitBehavioralAction` (creates BehavioralRecord rows; logs `IMPORT` audit with resourceType `Behavioral`)
+- All call `requireRole("ADMIN")`, refuse to commit if any row has errors, and run inside `prisma.$transaction`.
+
+### Wizard refactor
+- [x] [components/roles/admin/import-wizard.tsx](components/roles/admin/import-wizard.tsx) — extracted a generic `<CsvStep>` component shared by all four CSV steps (Roster, Grades, Attendance, Behavioral)
+- [x] Each step instance configures: required/optional columns, hints, preview server action, commit server action, preview table headers, row renderer, commit button label, success summary renderer
+- [x] Stepper now allows free navigation between Steps 2-5 once a school year is selected (you don't have to do them in order)
+- [x] Net code size: wizard went from ~360 to ~510 lines but covers **4× the functionality** (avg ~127 lines per step config vs the previous 250+ lines for just one)
+
+### Phase 2b Definition of Done — Verified 2026-05-13
+- [x] Grades validator caught all 4 deliberate errors (non-enrolled LRN, unknown subject code, quarter out of range, score > maxScore) — `scripts/verify-csv-import.ts grades /tmp/aem-grades-test.csv`
+- [x] Attendance validator caught all 4 errors including same-file (LRN, date) duplicates and combined errors on a single row (bad status AND duplicate)
+- [x] Behavioral validator caught all 5 error variations (non-enrolled, bad date, bad category, bad severity, empty description)
+- [x] Clean CSVs committed successfully: 8 grade rows, 7 attendance rows, 4 behavioral records
+- [x] Attendance upsert works — re-running the same CSV would update, not duplicate
+- [x] Maria's profile (LRN 100000000001) now has real data: 2 Math grades showing decline (85→72), 1 Science grade, full week of attendance, 2 behavioral incidents — exactly matches Scene 1 of the reference scenario
+- [x] Typecheck clean for all Phase 2b code
+
+### Phase 2b retrospective
+- **Generic `<CsvStep>` was the right call.** Considered 4 separate copy-pasted step components. The generic version covers all 4 with one ~280-line component plus 4 ~50-line configuration instances. Future CSV steps (e.g. SEL assessment imports in Phase 3) drop in as another `<CsvStep>` instance.
+- **Three-line schema, four-step pipeline.** The `Grade`, `Attendance`, `BehavioralRecord` models from Phase 2a's migration are now driven entirely by the wizard — no manual seed code needed for these tables.
+- **Server actions auto-validate twice** (once at preview, once at commit). Cheap insurance: if the user changes the CSV between preview and commit, we don't trust the preview result. Tradeoff is doubled DB lookups for refs — acceptable since these are admin operations.
+- **Maria's seed scenario data is now live in DB** for Phase 4's risk-scoring engine to consume — Academic Decline Cluster pattern will fire (3 quarters declining + attendance issue). Phase 2c/2d will wire teacher + counselor views to actually see this data.
+
+---
+
 ## Phase 2 — Data Capture & Import *(Week 2)*
 
 **Goal:** Teachers can record daily data; admin can bulk-import. All data is year-scoped and RBAC-respected.
