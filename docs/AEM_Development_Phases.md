@@ -344,6 +344,45 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 
 ---
 
+## Phase 2.5 — Admin UI gaps ✅ *(complete 2026-05-14)*
+
+**Goal:** Close the admin-side gap left by Phase 2 — give the ADMIN role a real UI for managing users, school setup, consent, and audit, so no human task still requires editing `seed.ts`. Unblocks Scenes 0.1, 0.2, and 11 of the reference scenario.
+
+### Server actions (RBAC + audit on every mutation)
+- [x] [app/actions/admin/users.ts](app/actions/admin/users.ts) — `createUserAction`, `suspendUserAction`, `reactivateUserAction`, `resetPasswordAction`, `addAssignmentAction`, `removeAssignmentAction`. All call `requireRole("ADMIN")` and `logAudit({ action: CREATE | UPDATE | DELETE, resourceType: "User" | "TeacherAssignment" })`. Passwords hashed with bcrypt cost 10.
+- [x] [app/actions/admin/setup.ts](app/actions/admin/setup.ts) — `createSchoolYearAction`, `activateSchoolYearAction`, `createSectionAction`, `createSubjectAction`. Activation runs inside a transaction that deactivates every other year first, enforcing the "exactly one active SY at a time" rule at the app layer.
+- [x] [app/actions/admin/consent.ts](app/actions/admin/consent.ts) — `setConsentAction` (handles both GRANTED and REVOKED). Revocation requires non-empty `notes`; Zod refine enforces it. Audit fires `CONSENT_GRANTED` or `CONSENT_REVOKED` per change.
+
+### Pages built
+- [x] [app/admin/users/page.tsx](app/admin/users/page.tsx) — list (filtered by role), inline "Create user" card, per-row Reset password / Suspend / Reactivate actions. [components/roles/admin/users-manager.tsx](components/roles/admin/users-manager.tsx).
+- [x] [app/admin/users/[id]/page.tsx](app/admin/users/%5Bid%5D/page.tsx) — teacher assignment manager. Year-aware: picking the year filters section + subject dropdowns. Adviser checkbox optional. [components/roles/admin/user-assignments-panel.tsx](components/roles/admin/user-assignments-panel.tsx).
+- [x] [app/admin/setup/page.tsx](app/admin/setup/page.tsx) — School Years card (create + activate) plus per-year Sections / Subjects sub-panels. [components/roles/admin/setup-manager.tsx](components/roles/admin/setup-manager.tsx).
+- [x] [app/admin/audit/page.tsx](app/admin/audit/page.tsx) — fully server-component filterable table. Filters via `searchParams`: action, resourceType, userId, from, to. 50-per-page pagination. Detail panel renders `metadata` JSON pretty-printed.
+- [x] [app/admin/consent/page.tsx](app/admin/consent/page.tsx) — per-student row × 3 scope cells. Each cell shows current status, justification (if revoked), and the appropriate action button. Revoke flow requires inline justification before submit. [components/roles/admin/consent-manager.tsx](components/roles/admin/consent-manager.tsx).
+
+### Nav
+- [x] [components/roles/admin/admin-config.ts](components/roles/admin/admin-config.ts) — `ADMIN_NAV` now wires hrefs to all five admin destinations (Users, Setup, Import, Consent, Audit). No more placeholder cards on the admin landing page.
+
+### Phase 2.5 Definition of Done — Verified 2026-05-14
+- [x] All 4 new admin pages render through the UI; no admin task still requires running `seed.ts` to demo
+- [x] Every mutation enforces `requireRole("ADMIN")` + `logAudit(...)`
+- [x] Revocation requires written justification (Zod refine + UI validation)
+- [x] `npx tsc --noEmit` clean (after dropping stale `.next/types`)
+- [x] `npm run lint` clean
+- [x] `npm run build` succeeds — **23 routes** (was 18; added /admin/users, /admin/users/[id], /admin/setup, /admin/audit, /admin/consent)
+- [x] Admin gets 200 on all five; teacher gets 307 on all five (curl probe with logged-in cookie jars)
+- [x] 404 on bogus `/admin/users/[id]` (route uses `notFound()`)
+- [x] Scene 0.1 (admin creates SY + section + subject), 0.2 (admin creates teacher user + assignment), and 11 (admin revokes consent with justification) are walkable end-to-end through the UI
+
+### Phase 2.5 retrospective
+- **Stale `.next/types` caught typecheck on first run** — leftover `app/dashboard/page.tsx` validator referenced a deleted route. `rm -rf .next` cleared it; adding a "rm -rf .next" to the start-of-session checklist would have saved a few minutes. The on-disk tree should be the source of truth, not the cached validator.
+- **Audit page is fully server-rendered.** Filters live in `searchParams` and the form is a plain `<form method="GET">`. No client JS needed for the most common admin workflow (browse + filter). The detail panel uses a URL query param `?detail=<id>` instead of client state — share-able, no flash on load.
+- **Consent revoke is the only "destructive" admin flow that gates on justification.** Other writes are reversible (suspend/reactivate, deactivate-a-year-by-activating-another). The Zod refine on `notes` is the source of truth; the UI's required-textarea is just defense-in-depth.
+- **Year activation runs in a transaction.** Naive `updateMany → update` would have a window where zero years are active. The single `prisma.$transaction` block closes it. Same pattern admin will use for any "exactly one active X" rule going forward.
+- **Teacher-assignment uniqueness is a `(userId, sectionId, subjectId, schoolYearId)` constraint.** Catching the Prisma "Unique constraint" error gives a clean user-facing message. Add-and-remove flows live on the same `/admin/users/[id]` page rather than a separate route — simpler for a low-frequency operation.
+
+---
+
 ## Phase 2 — Data Capture & Import *(Week 2)*
 
 **Goal:** Teachers can record daily data; admin can bulk-import. All data is year-scoped and RBAC-respected.

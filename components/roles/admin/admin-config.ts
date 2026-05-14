@@ -8,25 +8,34 @@ export const ADMIN_THEME: ThemeName = "indigo";
 
 export const ADMIN_NAV: NavSection[] = [
   {
+    title: "User management",
+    href: "/admin/users",
+    description:
+      "Create staff accounts, suspend access, reset passwords, and assign teachers to sections.",
+  },
+  {
+    title: "School setup",
+    href: "/admin/setup",
+    description:
+      "Create and activate school years, then add the sections and subjects each year offers.",
+  },
+  {
     title: "Import wizard",
     href: "/admin/import",
     description:
-      "Load student rosters, grades, attendance, behavioral records, and historical interventions per school year.",
+      "Load student rosters, grades, attendance, and behavioral records per school year.",
   },
   {
-    title: "User management",
+    title: "Consent management",
+    href: "/admin/consent",
     description:
-      "Create staff accounts, suspend access, reset passwords, and keep role assignments aligned with school operations.",
+      "Review consent records per student and process revocations with written justification.",
   },
   {
-    title: "Consent and audit",
+    title: "Audit log",
+    href: "/admin/audit",
     description:
-      "Review consent records, process revocations, and inspect append-only audit trails for sensitive actions.",
-  },
-  {
-    title: "System configuration",
-    description:
-      "Maintain thresholds, risk-score weights, sections, subjects, and term setup with versioned governance controls.",
+      "Inspect the append-only audit trail of authentication events, data writes, and sensitive reads.",
   },
 ];
 
