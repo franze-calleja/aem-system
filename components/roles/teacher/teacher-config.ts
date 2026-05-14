@@ -14,6 +14,12 @@ export const TEACHER_NAV: NavSection[] = [
       "Open handled sections, review rosters, and move quickly into attendance, grades, student risk, and behavioral logging.",
   },
   {
+    title: "Student Risk",
+    href: "/teacher/student-risk",
+    description:
+      "View risk scores and factor breakdowns for students in your assigned sections.",
+  },
+  {
     title: "Intervention Feedback",
     href: "/teacher/intervention-feedback",
     description:

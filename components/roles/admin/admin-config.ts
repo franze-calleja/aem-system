@@ -32,6 +32,12 @@ export const ADMIN_NAV: NavSection[] = [
       "Review consent records per student and process revocations with written justification.",
   },
   {
+    title: "Algorithm configuration",
+    href: "/admin/algorithm",
+    description:
+      "Adjust risk scoring weights, band thresholds, and pattern detection rules. Each change creates an immutable versioned record.",
+  },
+  {
     title: "Audit log",
     href: "/admin/audit",
     description:

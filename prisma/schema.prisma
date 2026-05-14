@@ -1,8 +1,8 @@
-// AEM System — Phase 2a schema
+// AEM System — Phase 4 schema
 // Covers: persistent identity, per-year enrollment context, consent, audit,
-// grades, attendance, behavioral records.
-// Later phases add: SELAssessment, CounselingNote, Intervention*,
-// RiskAssessment, PatternMatch, RecommendationDraft.
+// grades, attendance, behavioral records, risk scoring, pattern detection,
+// and recommendation drafts.
+// Later phases add: SELAssessment, CounselingNote, Intervention*.
 
 generator client {
   provider = "prisma-client-js"
@@ -91,6 +91,33 @@ enum BehaviorSeverity {
   HIGH
 }
 
+// ─── Phase 4 enums ──────────────────────────────────────────────────────────
+
+enum RiskBand {
+  LOW
+  MODERATE
+  HIGH
+}
+
+enum PatternScope {
+  STUDENT
+  SECTION
+  GRADE
+  SCHOOL
+}
+
+enum PatternStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum RecommendationStatus {
+  OPEN
+  DISMISSED
+  INSTANTIATED
+}
+
 enum AuditAction {
   // Auth
   LOGIN
@@ -108,6 +135,11 @@ enum AuditAction {
   GRADE_RECORDED
   ATTENDANCE_RECORDED
   BEHAVIORAL_INCIDENT_RECORDED
+  RISK_RECOMPUTED
+  ALGORITHM_CONFIG_CHANGED
+  PATTERN_MATCHED
+  RECOMMENDATION_DRAFTED
+  RECOMMENDATION_DISMISSED
   RISK_OVERRIDE
   INTERVENTION_APPROVED
   INTERVENTION_REVISED
@@ -254,6 +286,7 @@ model StudentEnrollment {
   grades            Grade[]
   attendance        Attendance[]
   behavioralRecords BehavioralRecord[]
+  riskAssessments   RiskAssessment[]
 
   @@unique([studentId, schoolYearId])
   @@index([sectionId])
@@ -352,4 +385,81 @@ model AuditLog {
   @@index([resourceType, resourceId])
   @@index([action])
   @@index([createdAt])
+}
+
+// ─── Phase 4: Algorithmic Engine ────────────────────────────────────────────
+
+// Versioned configuration for the risk-scoring algorithm.
+// Exactly one row should have isActive=true; enforced at app layer.
+model AlgorithmConfig {
+  id            String   @id @default(cuid())
+  version       Int      @unique
+  weights       Json     // { academic, attendance, behavioral, interventionHistory, profile }
+  thresholds    Json     // { moderateMin, highMin }
+  ruleConfig    Json     // per-pattern-rule toggles
+  isActive      Boolean  @default(false)
+  changedById   String?  // plain string — FK to User not enforced in DB
+  changedAt     DateTime @default(now())
+  justification String?
+
+  riskAssessments RiskAssessment[]
+
+  @@index([isActive])
+}
+
+// One row per enrollment per compute run.
+// Only the latest row per enrollment is "current"; older rows are history.
+model RiskAssessment {
+  id            String          @id @default(cuid())
+  enrollmentId  String
+  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  schoolYearId  String
+  score         Float           // 0–100
+  band          RiskBand
+  factors       Json            // { academic, attendance, behavioral, interventionHistory, profile, breakdown }
+  configId      String
+  config        AlgorithmConfig @relation(fields: [configId], references: [id], onDelete: Restrict)
+  configVersion Int
+  computedAt    DateTime        @default(now())
+
+  @@index([enrollmentId, computedAt])
+  @@index([schoolYearId, band])
+  @@index([schoolYearId, computedAt])
+}
+
+// Pattern match result from the multi-scope pattern detector.
+model PatternMatch {
+  id            String        @id @default(cuid())
+  scope         PatternScope
+  scopeTargetId String        // studentId, sectionId, gradeLevel, or "school"
+  ruleId        String        // e.g. "ACADEMIC_DECLINE_CLUSTER"
+  evidence      Json          // structured evidence payload per rule
+  schoolYearId  String
+  matchedAt     DateTime      @default(now())
+  status        PatternStatus @default(OPEN)
+
+  recommendations RecommendationDraft[]
+
+  @@index([scope, scopeTargetId])
+  @@index([ruleId])
+  @@index([schoolYearId, status])
+}
+
+// AI-generated recommendation draft surfaced to counselors.
+model RecommendationDraft {
+  id                   String               @id @default(cuid())
+  scope                PatternScope
+  scopeTargetId        String
+  suggestedType        String               // intervention type code
+  rationale            String
+  evidence             Json
+  triggeringPatternId  String?
+  triggeringPattern    PatternMatch?        @relation(fields: [triggeringPatternId], references: [id], onDelete: SetNull)
+  status               RecommendationStatus @default(OPEN)
+  schoolYearId         String
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([scope, scopeTargetId])
+  @@index([schoolYearId, status])
 }

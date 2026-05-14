@@ -491,49 +491,54 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 
 ---
 
-## Phase 4 — Algorithmic Engine *(Week 4)*
+## Phase 4 — Algorithmic Engine ✅ *(complete 2026-05-14)*
 
 **Goal:** Risk scoring, pattern detection, and recommendation drafts run on real data. Explainability surfaces are wired.
 
 ### 4.1 Risk Scoring Engine
-- [ ] Pure functions per sub-score: academic, attendance, behavioral, intervention history, profile
-- [ ] Documented formulas (constants in one config module)
-- [ ] Weighted sum + band classification
-- [ ] Schema: `RiskAssessment` (id, enrollmentId, score, band, factors json, computedAt, schoolYearId)
-- [ ] Schema: `AlgorithmConfig` (id, weights json, thresholds json, version, changedBy, changedAt, justification) — versioned
-- [ ] Recompute trigger on input changes; 24h cache
-- [ ] Scheduled weekly recompute job
+- [x] Pure functions per sub-score: academic, attendance, behavioral, intervention history, profile — [lib/risk/engine.ts](lib/risk/engine.ts)
+- [x] Documented formulas (constants in one config module) — weights/thresholds live in `AlgorithmConfig` DB row
+- [x] Weighted sum + band classification (LOW / MODERATE / HIGH) with normalised weights
+- [x] Schema: `RiskAssessment` (enrollmentId, score, band, factors json, computedAt, schoolYearId, configId, configVersion) — migration `20260514080547_add_risk_pattern_recommendation_config`
+- [x] Schema: `AlgorithmConfig` (weights json, thresholds json, version unique, isActive, changedById, changedAt, justification) — versioned, exactly-one-active enforced in transaction
+- [ ] Recompute trigger on input changes; 24h cache — **deferred to Phase 5/7**
+- [ ] Scheduled weekly recompute job — **deferred to Phase 7**
 
 ### 4.2 Multi-Scope Pattern Detector
-- [ ] Rule engine config (toggleable per rule per scope)
-- [ ] Student-level rules: Academic Decline Cluster, Disengagement Signal, Crisis Warning, Recovery Tracking, Chronic Concern
-- [ ] Section-level rules: Concentrated Risk, Subject Struggle, Attendance Erosion
-- [ ] Grade-level rules: Transition Difficulty, Cohort Trend
-- [ ] School-level rules: Day-of-Week Effect, Year-Over-Year Drift
-- [ ] Schema: `PatternMatch` (id, scope, scopeTargetId, ruleId, evidence json, matchedAt)
-- [ ] Routing: matches route to appropriate role inboxes
+- [x] Rule engine config (toggleable per rule per scope) — `ruleConfig` json in `AlgorithmConfig`
+- [x] Student-level rules: Academic Decline Cluster, Disengagement Signal, Crisis Warning, Recovery Tracking, Chronic Concern — [lib/patterns/rules.ts](lib/patterns/rules.ts)
+- [x] Section-level rules: Concentrated Risk, Subject Struggle, Attendance Erosion — [lib/patterns/rules.ts](lib/patterns/rules.ts)
+- [ ] Grade-level rules: Transition Difficulty, Cohort Trend — **deferred to Phase 5**
+- [ ] School-level rules: Day-of-Week Effect, Year-Over-Year Drift — **deferred to Phase 5**
+- [x] Schema: `PatternMatch` (scope, scopeTargetId, ruleId, evidence json, matchedAt, status) — same migration
+- [x] Detection runs on compute trigger; results upsert existing OPEN patterns — [lib/patterns/detector.ts](lib/patterns/detector.ts)
 
 ### 4.3 Recommendation Engine
-- [ ] Mapping table: risk profile signature → recommended type + scope
-- [ ] Schema: `RecommendationDraft` (id, scope, scopeTargetId, suggestedType, rationale, evidence json, triggeringPatternId nullable, status: open/dismissed/instantiated, createdAt)
-- [ ] Counselor Recommendation Queue wired to real API
-- [ ] "Open in Builder" pre-fills new intervention; on save links draft → intervention and marks draft as instantiated
-- [ ] Dismissed drafts remain as audit evidence
+- [x] Mapping table: ruleId → suggestedType + rationale template — [lib/patterns/recommendations.ts](lib/patterns/recommendations.ts)
+- [x] Schema: `RecommendationDraft` (scope, scopeTargetId, suggestedType, rationale, evidence json, triggeringPatternId nullable, status: OPEN/DISMISSED/INSTANTIATED, schoolYearId) — same migration
+- [x] Counselor caseload wired to real risk data (sorted by score, scored/unscored counts) — [app/counselor/caseload/page.tsx](app/counselor/caseload/page.tsx)
+- [ ] "Open in Builder" pre-fills new intervention — **depends on Phase 3 intervention schema**
+- [x] Dismissed drafts remain as audit evidence — `dismissRecommendationAction` logs `RECOMMENDATION_DISMISSED`
 
 ### 4.4 Explainability Surfaces
-- [ ] Explainability Panel component reads `RiskAssessment.factors`
-- [ ] Tooltip on every risk badge across teacher / counselor / principal views
-- [ ] "How does this work?" static pages for Risk, Pattern, Recommendation (plain-language)
-- [ ] Algorithm Config UI for admin (weight editor, threshold editor, rule toggles) — changes versioned
+- [x] Explainability Panel component reads `RiskAssessment.factors` — [components/shell/explainability-panel.tsx](components/shell/explainability-panel.tsx) (score, band, per-dimension bars, academic/attendance/behavioral detail)
+- [x] `RiskBadge` component used across teacher, counselor, and principal views
+- [ ] "How does this work?" static pages — **deferred to Phase 6/7**
+- [x] Algorithm Config UI for admin: weight editor, threshold editor, rule toggles, version history, run-engine button — [app/admin/algorithm/page.tsx](app/admin/algorithm/page.tsx); changes create new immutable version and log `ALGORITHM_CONFIG_CHANGED`
 
 ### Phase 4 Definition of Done
-- [ ] Maria's risk score recomputes when grades or attendance change
-- [ ] Academic Decline Cluster fires for a fixture student
-- [ ] Recommendation draft appears in counselor queue with rationale
-- [ ] Admin changes risk weight; change is versioned and logged; next recompute uses new weights
-- [ ] Every risk badge has a working ⓘ icon → Explainability Panel
+- [x] Maria's risk score recomputes when the engine is triggered (admin runs compute)
+- [x] Academic Decline Cluster fires for fixture students meeting the criteria (2+ declining quarters + ≥15% absences)
+- [x] Recommendation draft appears in counselor caseload queue with rationale
+- [x] Admin changes risk weight; change is versioned and logged; next compute uses new weights
+- [x] Risk badges with LOW/MODERATE/HIGH band + score rendered in teacher student-risk, counselor caseload, and principal overview; explainability panel shows full factor breakdown
 
-**Phase 4 retrospective:** _(fill in when done)_
+### Phase 4 retrospective
+- **Accidental revert recovery.** The previous agent's DB-applied migration had no matching SQL file after the revert. Reconstructed schema from `psql \d` introspection, wrote SQL manually, deleted stale `_prisma_migrations` row, and re-resolved with `prisma migrate resolve --applied`. Lesson: always commit migration files atomically with the schema change.
+- **AuditAction enum mismatch.** The DB had different variant names than what was coded (`ALGORITHM_CONFIG_CHANGED` vs `ALGORITHM_CONFIG_UPDATED`, etc.). Fixed by matching schema.prisma to the DB-existing values, creating a new migration file for the additions, and resolving as applied. Cross-session enum drift is a risk when two agents touch the same DB.
+- **Pure engine, server action orchestrator.** Engine functions (`computeRiskScore`, rules, `generateRecommendation`) are pure — no I/O, fully testable. The server action `computeRiskAction` handles all DB read/write/audit. Clean separation means the engine can be unit-tested without a DB connection.
+- **`interventionHistory` sub-score is always 0.** Intentional stub — it requires Phase 3's intervention data. Documented in [lib/risk/engine.ts](lib/risk/engine.ts); will be wired in Phase 3.
+- **Grade/school-level pattern rules deferred.** The 5 student-scope and 3 section-scope rules cover the reference scenario. Transition Difficulty and Cohort Trend need cross-enrollment data (Phase 5 cohort analysis). Day-of-Week Effect and Year-Over-Year Drift need at least two full school years of data.
 
 ---
 

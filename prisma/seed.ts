@@ -197,6 +197,40 @@ async function main() {
   for (const a of accounts) {
     console.log(`  ${a.email}  /  ${a.password}  (${a.role})`);
   }
+
+  // ── Default AlgorithmConfig ──────────────────────────────────────────────
+  // Version 1 ships with the Phase 4 engine. Exactly one row is active.
+  const existingConfig = await prisma.algorithmConfig.findFirst({ where: { version: 1 } });
+  if (!existingConfig) {
+    await prisma.algorithmConfig.create({
+      data: {
+        version: 1,
+        isActive: true,
+        justification: "Initial Phase 4 default weights",
+        weights: {
+          academic: 0.40,
+          attendance: 0.30,
+          behavioral: 0.20,
+          interventionHistory: 0.05,
+          profile: 0.05,
+        },
+        thresholds: { moderateMin: 40, highMin: 70 },
+        ruleConfig: {
+          ACADEMIC_DECLINE_CLUSTER: true,
+          DISENGAGEMENT_SIGNAL: true,
+          CRISIS_WARNING: true,
+          RECOVERY_TRACKING: true,
+          CHRONIC_CONCERN: true,
+          CONCENTRATED_RISK: true,
+          SUBJECT_STRUGGLE: true,
+          ATTENDANCE_EROSION: true,
+        },
+      },
+    });
+    console.log("  AlgorithmConfig: v1 seeded (active)");
+  } else {
+    console.log("  AlgorithmConfig: v1 already exists, skipped");
+  }
 }
 
 main()
