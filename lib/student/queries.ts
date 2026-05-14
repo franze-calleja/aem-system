@@ -3,12 +3,14 @@
 // here don't apply RBAC themselves — they're used inside role-guarded pages).
 
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
 import type {
   AttendanceStatus,
   BehaviorCategory,
   BehaviorSeverity,
   ConsentScope,
   ConsentStatus,
+  Role,
   Sex,
   SpedStatus,
 } from "@prisma/client";
@@ -265,4 +267,49 @@ export async function getStudentProfile(
       subjectAverages,
     },
   };
+}
+
+// ─── Counseling notes (counselor-only, audited) ─────────────────────────────
+
+export type CounselingNoteRow = {
+  id: string;
+  body: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * Returns counseling notes for an enrollment. Counselor-only at the query
+ * layer: any other role gets [] without a DB roundtrip. Every successful
+ * read is logged to AuditLog as COUNSELING_NOTE_READ.
+ */
+export async function getCounselingNotes(
+  enrollmentId: string,
+  viewerRole: Role,
+  viewerUserId: string,
+): Promise<CounselingNoteRow[]> {
+  if (viewerRole !== "COUNSELOR") return [];
+
+  const notes = await prisma.counselingNote.findMany({
+    where: { enrollmentId },
+    include: { author: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  await logAudit({
+    action: "COUNSELING_NOTE_READ",
+    userId: viewerUserId,
+    resourceType: "CounselingNote",
+    resourceId: enrollmentId,
+    metadata: { enrollmentId, count: notes.length },
+  });
+
+  return notes.map((n) => ({
+    id: n.id,
+    body: n.body,
+    authorName: n.author.name,
+    createdAt: n.createdAt.toISOString(),
+    updatedAt: n.updatedAt.toISOString(),
+  }));
 }

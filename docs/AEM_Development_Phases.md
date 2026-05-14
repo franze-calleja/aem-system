@@ -449,12 +449,14 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Back-relations added on `User`, `SchoolYear`, `StudentEnrollment`, `RecommendationDraft`
 - **Deviation from earlier draft:** `InterventionSession` model dropped. Session logging is captured via `InterventionNote` rows of type `OBSERVATION` per the handover plan — keeps the feedback channel uniform and avoids a near-duplicate model. Revisit if grouping by physical session becomes necessary.
 
-### 3.2 Counseling Notes
+### 3.2 Counseling Notes *(✅ 2026-05-14)*
 - [x] Schema: `CounselingNote` (id, enrollmentId, authorId, body, createdAt, updatedAt) — applied in 3.1
-- [ ] API: counselor-only read/write enforced at query layer (`getCounselingNotes` strips for non-counselors)
-- [ ] Teacher / Admin cannot fetch even by direct API request
-- [ ] Counselor → Student Profile → Counseling Notes tab wired
-- [ ] Every read logged in AuditLog (`COUNSELING_NOTE_READ`)
+- [x] Query helper `getCounselingNotes(enrollmentId, viewerRole, viewerUserId)` in [lib/student/queries.ts](lib/student/queries.ts) — non-counselors short-circuit to `[]` without a DB roundtrip
+- [x] Server action `createCounselingNoteAction` in [app/actions/counselor/notes.ts](app/actions/counselor/notes.ts) — `requireRole("COUNSELOR")`, Zod, audit
+- [x] Counselor → Student Profile → Counseling Notes section wired ([components/shell/student-profile-view.tsx](components/shell/student-profile-view.tsx) + [components/counselor/counseling-note-form.tsx](components/counselor/counseling-note-form.tsx))
+- [x] Principal student profile page does not pass `counselingNotes` prop → section hidden, no leak (verified via curl probe — 0 occurrences of note body text on the principal HTML)
+- [x] Every successful read logged in AuditLog as `COUNSELING_NOTE_READ`; every write as `COUNSELING_NOTE_CREATED`
+- [x] Verification script: [scripts/verify-counseling-notes.ts](scripts/verify-counseling-notes.ts) — confirms create/read/role-gate paths
 
 ### 3.3 Intervention Module (Multi-Scope)
 - [x] Schema: `Intervention` (id, scope, scopeTargetId, type, status, schoolYearId, ownerId, startDate, endDate?, schedule?, accommodations?, staffActions?, targetOutcomes?, triggeringRecommendationId?, timestamps) — applied in 3.1

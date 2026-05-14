@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getStudentProfile } from "@/lib/student/queries";
+import { getCounselingNotes, getStudentProfile } from "@/lib/student/queries";
 import StudentProfileView from "@/components/shell/student-profile-view";
 
 export default async function CounselorStudentProfilePage({
@@ -10,13 +10,19 @@ export default async function CounselorStudentProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("COUNSELOR");
+  const session = await requireRole("COUNSELOR");
   const { id } = await params;
   const sy = await getActiveSchoolYear();
   if (!sy) notFound();
 
   const profile = await getStudentProfile(id, sy.id);
   if (!profile) notFound();
+
+  const counselingNotes = await getCounselingNotes(
+    profile.enrollment.id,
+    session.user.role,
+    session.user.id,
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -26,7 +32,11 @@ export default async function CounselorStudentProfilePage({
       >
         ← Back to Caseload
       </Link>
-      <StudentProfileView profile={profile} viewerRole="COUNSELOR" />
+      <StudentProfileView
+        profile={profile}
+        viewerRole="COUNSELOR"
+        counselingNotes={counselingNotes}
+      />
     </div>
   );
 }

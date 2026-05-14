@@ -1,8 +1,12 @@
-import type { StudentProfileData } from "@/lib/student/queries";
+import type { CounselingNoteRow, StudentProfileData } from "@/lib/student/queries";
+import CounselingNoteForm from "@/components/counselor/counseling-note-form";
 
 type Props = {
   profile: StudentProfileData;
   viewerRole: "COUNSELOR" | "PRINCIPAL";
+  // Counselor-only. Other roles never receive this prop. When present (even
+  // as an empty array), the Counseling Notes section + form is rendered.
+  counselingNotes?: CounselingNoteRow[];
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -27,9 +31,10 @@ const STATUS_TEXT: Record<string, string> = {
   EXCUSED: "E",
 };
 
-export default function StudentProfileView({ profile, viewerRole }: Props) {
+export default function StudentProfileView({ profile, viewerRole, counselingNotes }: Props) {
   const { student, enrollment, consents, grades, attendance, behavioral, stats } = profile;
   const fullName = [student.lastName + ",", student.firstName, student.middleName].filter(Boolean).join(" ");
+  const showCounselingNotes = viewerRole === "COUNSELOR" && counselingNotes !== undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,9 +67,15 @@ export default function StudentProfileView({ profile, viewerRole }: Props) {
           <a href="#academic" className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50">Academic</a>
           <a href="#attendance" className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50">Attendance</a>
           <a href="#behavioral" className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50">Behavioral</a>
-          <span className="rounded-full border border-dashed border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-400">
-            Counseling Notes — Phase 3
-          </span>
+          {showCounselingNotes ? (
+            <a href="#counseling-notes" className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 hover:bg-slate-50">
+              Counseling Notes
+            </a>
+          ) : (
+            <span className="rounded-full border border-dashed border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-400">
+              Counseling Notes — Counselor only
+            </span>
+          )}
           <span className="rounded-full border border-dashed border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-400">
             Risk Profile — Phase 4
           </span>
@@ -234,6 +245,38 @@ export default function StudentProfileView({ profile, viewerRole }: Props) {
           </ul>
         )}
       </section>
+
+      {/* Counseling Notes — counselor only */}
+      {showCounselingNotes && (
+        <section id="counseling-notes" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5">
+          <header>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Counseling Notes</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Confidential. Visible to counselors only — teachers, principals, and admins cannot read these. Each read is logged in the audit trail.
+            </p>
+          </header>
+
+          {counselingNotes!.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400">
+              No counseling notes yet.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-slate-100">
+              {counselingNotes!.map((n) => (
+                <li key={n.id} className="py-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-slate-500">
+                    <span className="font-medium text-slate-700">{n.authorName}</span>
+                    <span>{new Date(n.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{n.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <CounselingNoteForm enrollmentId={enrollment.id} />
+        </section>
+      )}
 
       {/* Guardian */}
       {(student.guardianName || student.guardianContact) && (

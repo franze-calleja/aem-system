@@ -1,7 +1,7 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-14 (Phases 2.5 + 4 complete; Phase 3.1 schema shipped)
-**Next session starts at:** Phase 3.2 — Counseling Notes (server action + query helper + Student Profile wiring)
+**Last session ended:** 2026-05-14 (Phases 2.5 + 4 complete; Phase 3.1 schema + 3.2 counseling notes shipped)
+**Next session starts at:** Phase 3.3 — Intervention Builder (counselor creates Individual/Section/Grade/School interventions; section+ go through approval)
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 
