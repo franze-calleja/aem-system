@@ -441,20 +441,28 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [ ] Counselor: SEL Assessment CRUD
 - [ ] Teacher view restricted to limited fields; counselor sees full
 
+### 3.1 Schema migration *(✅ 2026-05-14)*
+- [x] Migration `20260514141749_add_intervention_counseling` applied
+- [x] 6 new models: `CounselingNote`, `Intervention`, `InterventionSensitive`, `InterventionParticipation`, `InterventionNote`, `InterventionRevision`
+- [x] 5 new enums: `InterventionStatus`, `InterventionType`, `InterventionNoteType`, `InterventionNoteStatus`, `ParticipationOutcome` (intervention scope reuses `PatternScope`)
+- [x] 5 new `AuditAction` values: `COUNSELING_NOTE_CREATED`, `COUNSELING_NOTE_READ`, `INTERVENTION_CREATED`, `INTERVENTION_ACTIVATED`, `INTERVENTION_CANCELLED`
+- [x] Back-relations added on `User`, `SchoolYear`, `StudentEnrollment`, `RecommendationDraft`
+- **Deviation from earlier draft:** `InterventionSession` model dropped. Session logging is captured via `InterventionNote` rows of type `OBSERVATION` per the handover plan — keeps the feedback channel uniform and avoids a near-duplicate model. Revisit if grouping by physical session becomes necessary.
+
 ### 3.2 Counseling Notes
-- [ ] Schema: `CounselingNote` (id, studentId, authorId, content, createdAt)
-- [ ] API: counselor-only read/write enforced at Prisma layer
+- [x] Schema: `CounselingNote` (id, enrollmentId, authorId, body, createdAt, updatedAt) — applied in 3.1
+- [ ] API: counselor-only read/write enforced at query layer (`getCounselingNotes` strips for non-counselors)
 - [ ] Teacher / Admin cannot fetch even by direct API request
 - [ ] Counselor → Student Profile → Counseling Notes tab wired
-- [ ] Every read logged in AuditLog
+- [ ] Every read logged in AuditLog (`COUNSELING_NOTE_READ`)
 
 ### 3.3 Intervention Module (Multi-Scope)
-- [ ] Schema: `Intervention` (id, scope, scopeTargetId, type, frequency, startDate, endDate, schedule, accommodations, staffActions, targetOutcomes, status, schoolYearId, ownerId)
-- [ ] Schema: `InterventionSensitive` (id, interventionId, rationale, counselingContext) — separate table for stricter access
-- [ ] Schema: `InterventionParticipation` (id, interventionId, enrollmentId, outcome)
-- [ ] Schema: `InterventionNote` (id, interventionId, type enum, authorId, content, status, createdAt) — observation / revision_request / outcome_observation
-- [ ] Schema: `InterventionRevision` (id, interventionId, changedBy, diff json, reason, triggeringNoteId nullable, isSignificant, isInterim, approvedBy nullable, createdAt)
-- [ ] Schema: `InterventionSession` (id, interventionId, conductedBy, date, duration, attendingEnrollmentIds, observations)
+- [x] Schema: `Intervention` (id, scope, scopeTargetId, type, status, schoolYearId, ownerId, startDate, endDate?, schedule?, accommodations?, staffActions?, targetOutcomes?, triggeringRecommendationId?, timestamps) — applied in 3.1
+- [x] Schema: `InterventionSensitive` (interventionId 1-1, rationale, counselingContext) — separate table for stricter access — applied in 3.1
+- [x] Schema: `InterventionParticipation` (interventionId, enrollmentId, outcome) — applied in 3.1
+- [x] Schema: `InterventionNote` (interventionId, authorId, noteType, content, status, createdAt) — observation / revision_request / outcome_observation — applied in 3.1
+- [x] Schema: `InterventionRevision` (interventionId, changedById, diff, reason, triggeringNoteId?, isSignificant, isInterim, approvedById?, createdAt) — applied in 3.1
+- [~] Schema: `InterventionSession` — **dropped** in favour of `InterventionNote(OBSERVATION)`. See deviation note in 3.1.
 
 ### 3.4 Intervention Builder & Workflow
 - [ ] Counselor → Intervention Builder wired to real API (replace [counselor-store.ts](components/roles/counselor/counselor-store.ts) localStorage)

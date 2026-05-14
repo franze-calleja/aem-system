@@ -141,10 +141,54 @@ enum AuditAction {
   RECOMMENDATION_DRAFTED
   RECOMMENDATION_DISMISSED
   RISK_OVERRIDE
+  COUNSELING_NOTE_CREATED
+  COUNSELING_NOTE_READ
+  INTERVENTION_CREATED
+  INTERVENTION_ACTIVATED
+  INTERVENTION_CANCELLED
   INTERVENTION_APPROVED
   INTERVENTION_REVISED
   INTERIM_REVISION
   YEAR_SWITCHED
+}
+
+enum InterventionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum InterventionType {
+  ACADEMIC_SUPPORT
+  COUNSELING_SESSION
+  IMMEDIATE_COUNSELING
+  POSITIVE_REINFORCEMENT
+  CASE_REVIEW
+  SECTION_INTERVENTION
+  SUBJECT_REMEDIATION
+  ATTENDANCE_PROGRAM
+}
+
+enum InterventionNoteType {
+  OBSERVATION
+  REVISION_REQUEST
+  OUTCOME_OBSERVATION
+}
+
+enum InterventionNoteStatus {
+  OPEN
+  ACKNOWLEDGED
+  INCORPORATED
+  DISMISSED
+}
+
+enum ParticipationOutcome {
+  IMPROVING
+  STABLE
+  DECLINING
+  COMPLETED
 }
 
 // ─── Identity & Auth ────────────────────────────────────────────────────────
@@ -159,11 +203,15 @@ model User {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  teacherAssignments  TeacherAssignment[]
-  auditLogs           AuditLog[]
-  recordedGrades      Grade[]
-  recordedAttendance  Attendance[]
-  recordedBehavioral  BehavioralRecord[]
+  teacherAssignments    TeacherAssignment[]
+  auditLogs             AuditLog[]
+  recordedGrades        Grade[]
+  recordedAttendance    Attendance[]
+  recordedBehavioral    BehavioralRecord[]
+  counselingNotes       CounselingNote[]
+  interventionsOwned    Intervention[]
+  interventionNotes     InterventionNote[]
+  interventionRevisions InterventionRevision[]
 
   @@index([role])
 }
@@ -177,10 +225,11 @@ model SchoolYear {
   endDate   DateTime
   isActive  Boolean  @default(false) // exactly one row should be true; enforced at app layer
 
-  sections            Section[]
-  subjects            Subject[]
-  enrollments         StudentEnrollment[]
-  teacherAssignments  TeacherAssignment[]
+  sections           Section[]
+  subjects           Subject[]
+  enrollments        StudentEnrollment[]
+  teacherAssignments TeacherAssignment[]
+  interventions      Intervention[]
 
   @@index([isActive])
 }
@@ -192,8 +241,8 @@ model Section {
   name         String // e.g. "Newton"
   gradeLevel   String // e.g. "Grade 9" — string keeps PH naming flexible
 
-  enrollments         StudentEnrollment[]
-  teacherAssignments  TeacherAssignment[]
+  enrollments        StudentEnrollment[]
+  teacherAssignments TeacherAssignment[]
 
   @@unique([schoolYearId, gradeLevel, name])
   @@index([schoolYearId])
@@ -235,22 +284,22 @@ model TeacherAssignment {
 // ─── Student: persistent identity + per-year enrollment ─────────────────────
 
 model Student {
-  id           String     @id @default(cuid())
-  lrn          String     @unique // PH Learner Reference Number
-  firstName    String
-  lastName     String
-  middleName   String?
-  sex          Sex
-  birthDate    DateTime
-  guardianName String?
+  id              String     @id @default(cuid())
+  lrn             String     @unique // PH Learner Reference Number
+  firstName       String
+  lastName        String
+  middleName      String?
+  sex             Sex
+  birthDate       DateTime
+  guardianName    String?
   guardianContact String?
-  spedStatus   SpedStatus @default(NONE)
+  spedStatus      SpedStatus @default(NONE)
   // SPED status changes are versioned via SpedStatusChange below.
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  enrollments      StudentEnrollment[]
-  consentRecords   ConsentRecord[]
+  enrollments       StudentEnrollment[]
+  consentRecords    ConsentRecord[]
   spedStatusHistory SpedStatusChange[]
 
   @@index([lastName, firstName])
@@ -270,23 +319,25 @@ model SpedStatusChange {
 }
 
 model StudentEnrollment {
-  id              String           @id @default(cuid())
-  studentId       String
-  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  schoolYearId    String
-  schoolYear      SchoolYear       @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
-  sectionId       String
-  section         Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  gradeLevel      String // denormalized for fast filters; should match section.gradeLevel
+  id               String           @id @default(cuid())
+  studentId        String
+  student          Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  schoolYearId     String
+  schoolYear       SchoolYear       @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+  sectionId        String
+  section          Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  gradeLevel       String // denormalized for fast filters; should match section.gradeLevel
   learningModality LearningModality @default(FACE_TO_FACE)
-  status          EnrollmentStatus @default(ACTIVE)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  status           EnrollmentStatus @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  grades            Grade[]
-  attendance        Attendance[]
-  behavioralRecords BehavioralRecord[]
-  riskAssessments   RiskAssessment[]
+  grades                     Grade[]
+  attendance                 Attendance[]
+  behavioralRecords          BehavioralRecord[]
+  riskAssessments            RiskAssessment[]
+  counselingNotes            CounselingNote[]
+  interventionParticipations InterventionParticipation[]
 
   @@unique([studentId, schoolYearId])
   @@index([sectionId])
@@ -296,20 +347,20 @@ model StudentEnrollment {
 // ─── Academic / Attendance / Behavioral ─────────────────────────────────────
 
 model Grade {
-  id             String         @id @default(cuid())
+  id             String            @id @default(cuid())
   enrollmentId   String
   enrollment     StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   subjectId      String
-  subject        Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject        Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   quarter        Int // 1..4
   score          Float
   maxScore       Float
-  assessmentKind AssessmentKind @default(REGULAR)
+  assessmentKind AssessmentKind    @default(REGULAR)
   label          String? // e.g. "Q1 Quiz 2"; nullable for plain quarterly score
   recordedById   String?
-  recordedBy     User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-  recordedAt     DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  recordedBy     User?             @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedAt     DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([enrollmentId])
   @@index([subjectId])
@@ -317,16 +368,16 @@ model Grade {
 }
 
 model Attendance {
-  id           String           @id @default(cuid())
+  id           String            @id @default(cuid())
   enrollmentId String
   enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   date         DateTime // date only (UTC midnight)
   status       AttendanceStatus
   notes        String?
   recordedById String?
-  recordedBy   User?            @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-  recordedAt   DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  recordedBy   User?             @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedAt   DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@unique([enrollmentId, date])
   @@index([enrollmentId])
@@ -353,14 +404,14 @@ model BehavioralRecord {
 // ─── Consent ────────────────────────────────────────────────────────────────
 
 model ConsentRecord {
-  id         String        @id @default(cuid())
-  studentId  String
-  student    Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  scope      ConsentScope
-  status     ConsentStatus @default(GRANTED)
-  grantedAt  DateTime      @default(now())
-  revokedAt  DateTime?
-  notes      String?
+  id        String        @id @default(cuid())
+  studentId String
+  student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  scope     ConsentScope
+  status    ConsentStatus @default(GRANTED)
+  grantedAt DateTime      @default(now())
+  revokedAt DateTime?
+  notes     String?
 
   @@unique([studentId, scope])
   @@index([studentId])
@@ -394,11 +445,11 @@ model AuditLog {
 model AlgorithmConfig {
   id            String   @id @default(cuid())
   version       Int      @unique
-  weights       Json     // { academic, attendance, behavioral, interventionHistory, profile }
-  thresholds    Json     // { moderateMin, highMin }
-  ruleConfig    Json     // per-pattern-rule toggles
+  weights       Json // { academic, attendance, behavioral, interventionHistory, profile }
+  thresholds    Json // { moderateMin, highMin }
+  ruleConfig    Json // per-pattern-rule toggles
   isActive      Boolean  @default(false)
-  changedById   String?  // plain string — FK to User not enforced in DB
+  changedById   String? // plain string — FK to User not enforced in DB
   changedAt     DateTime @default(now())
   justification String?
 
@@ -410,17 +461,17 @@ model AlgorithmConfig {
 // One row per enrollment per compute run.
 // Only the latest row per enrollment is "current"; older rows are history.
 model RiskAssessment {
-  id            String          @id @default(cuid())
+  id            String            @id @default(cuid())
   enrollmentId  String
   enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   schoolYearId  String
-  score         Float           // 0–100
+  score         Float // 0–100
   band          RiskBand
-  factors       Json            // { academic, attendance, behavioral, interventionHistory, profile, breakdown }
+  factors       Json // { academic, attendance, behavioral, interventionHistory, profile, breakdown }
   configId      String
-  config        AlgorithmConfig @relation(fields: [configId], references: [id], onDelete: Restrict)
+  config        AlgorithmConfig   @relation(fields: [configId], references: [id], onDelete: Restrict)
   configVersion Int
-  computedAt    DateTime        @default(now())
+  computedAt    DateTime          @default(now())
 
   @@index([enrollmentId, computedAt])
   @@index([schoolYearId, band])
@@ -431,9 +482,9 @@ model RiskAssessment {
 model PatternMatch {
   id            String        @id @default(cuid())
   scope         PatternScope
-  scopeTargetId String        // studentId, sectionId, gradeLevel, or "school"
-  ruleId        String        // e.g. "ACADEMIC_DECLINE_CLUSTER"
-  evidence      Json          // structured evidence payload per rule
+  scopeTargetId String // studentId, sectionId, gradeLevel, or "school"
+  ruleId        String // e.g. "ACADEMIC_DECLINE_CLUSTER"
+  evidence      Json // structured evidence payload per rule
   schoolYearId  String
   matchedAt     DateTime      @default(now())
   status        PatternStatus @default(OPEN)
@@ -447,19 +498,133 @@ model PatternMatch {
 
 // AI-generated recommendation draft surfaced to counselors.
 model RecommendationDraft {
-  id                   String               @id @default(cuid())
-  scope                PatternScope
-  scopeTargetId        String
-  suggestedType        String               // intervention type code
-  rationale            String
-  evidence             Json
-  triggeringPatternId  String?
-  triggeringPattern    PatternMatch?        @relation(fields: [triggeringPatternId], references: [id], onDelete: SetNull)
-  status               RecommendationStatus @default(OPEN)
-  schoolYearId         String
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  id                  String               @id @default(cuid())
+  scope               PatternScope
+  scopeTargetId       String
+  suggestedType       String // intervention type code
+  rationale           String
+  evidence            Json
+  triggeringPatternId String?
+  triggeringPattern   PatternMatch?        @relation(fields: [triggeringPatternId], references: [id], onDelete: SetNull)
+  status              RecommendationStatus @default(OPEN)
+  schoolYearId        String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  instantiatedInterventions Intervention[]
 
   @@index([scope, scopeTargetId])
   @@index([schoolYearId, status])
+}
+
+// ─── Phase 3: Counseling & Intervention ─────────────────────────────────────
+
+// Free-form counseling notes attached to a student's enrollment.
+// Body is counselor-only; query layer must strip for other roles.
+model CounselingNote {
+  id           String            @id @default(cuid())
+  enrollmentId String
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body         String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([enrollmentId])
+  @@index([authorId])
+}
+
+// Plan record. Public fields visible to involved staff per the visibility
+// matrix; sensitive fields live in InterventionSensitive.
+model Intervention {
+  id                         String               @id @default(cuid())
+  scope                      PatternScope
+  scopeTargetId              String // studentId | sectionId | gradeLevel | "school"
+  type                       InterventionType
+  status                     InterventionStatus   @default(DRAFT)
+  schoolYearId               String
+  schoolYear                 SchoolYear           @relation(fields: [schoolYearId], references: [id], onDelete: Restrict)
+  ownerId                    String
+  owner                      User                 @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  startDate                  DateTime
+  endDate                    DateTime?
+  schedule                   String?
+  accommodations             String?
+  staffActions               String?
+  targetOutcomes             String?
+  triggeringRecommendationId String?
+  triggeringRecommendation   RecommendationDraft? @relation(fields: [triggeringRecommendationId], references: [id], onDelete: SetNull)
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  sensitive      InterventionSensitive?
+  participations InterventionParticipation[]
+  notes          InterventionNote[]
+  revisions      InterventionRevision[]
+
+  @@index([scope, scopeTargetId])
+  @@index([schoolYearId, status])
+  @@index([ownerId])
+}
+
+// Counselor + principal only. Stripped at the query layer for other roles.
+model InterventionSensitive {
+  id                String       @id @default(cuid())
+  interventionId    String       @unique
+  intervention      Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  rationale         String
+  counselingContext String?
+}
+
+// Per-student tracking inside an intervention (always one row even for
+// Individual scope — keeps outcome tracking uniform across scopes).
+model InterventionParticipation {
+  id             String                @id @default(cuid())
+  interventionId String
+  intervention   Intervention          @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  enrollmentId   String
+  enrollment     StudentEnrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  outcome        ParticipationOutcome?
+
+  @@unique([interventionId, enrollmentId])
+  @@index([enrollmentId])
+}
+
+// Structured feedback channel from involved staff to the counselor.
+model InterventionNote {
+  id             String                 @id @default(cuid())
+  interventionId String
+  intervention   Intervention           @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User                   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  noteType       InterventionNoteType
+  content        String
+  status         InterventionNoteStatus @default(OPEN)
+  createdAt      DateTime               @default(now())
+
+  triggeredRevisions InterventionRevision[]
+
+  @@index([interventionId, status])
+  @@index([authorId])
+}
+
+// One row per plan edit; full audit trail of plan evolution.
+// approvedById is a plain string (no FK) per the handover spec.
+model InterventionRevision {
+  id               String            @id @default(cuid())
+  interventionId   String
+  intervention     Intervention      @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  changedById      String
+  changedBy        User              @relation(fields: [changedById], references: [id], onDelete: Restrict)
+  diff             Json
+  reason           String
+  triggeringNoteId String?
+  triggeringNote   InterventionNote? @relation(fields: [triggeringNoteId], references: [id], onDelete: SetNull)
+  isSignificant    Boolean           @default(false)
+  isInterim        Boolean           @default(false)
+  approvedById     String?
+  createdAt        DateTime          @default(now())
+
+  @@index([interventionId, createdAt])
 }
