@@ -218,6 +218,60 @@ A living checklist for building the AEM system. Mirrors the spec's 7-week roadma
 
 ---
 
+## Phase 2c — Teacher UI on Real APIs ✅ *(complete 2026-05-14)*
+
+**Goal:** Replace the localStorage-backed teacher UI with DB-backed pages. Teachers can see real students, take real attendance, enter real grades, and log real behavioral records. The Phase 0 localStorage scaffolding for teachers is gone.
+
+### Query helpers (server-only)
+- [x] [lib/teacher/queries.ts](lib/teacher/queries.ts):
+  - `getTeacherClasses(userId, schoolYearId)` — list of assignment cards with student counts
+  - `getTeacherClassDetail(userId, assignmentId, schoolYearId)` — assignment + roster, returns null if not the teacher's (RBAC at the query layer)
+  - `getSectionAttendance(sectionId, schoolYearId, from, to)` — date-windowed map
+  - `getSectionGrades(sectionId, subjectId, schoolYearId)` — grades for the teacher's subject
+  - `getSectionBehavioralRecords(sectionId, schoolYearId)` — most recent first
+
+### Server actions (RBAC + audit + revalidate)
+- [x] [app/actions/teacher/attendance.ts](app/actions/teacher/attendance.ts) — `recordAttendanceAction`: bulk upsert by `[enrollmentId, date]`, verifies every enrollment is in the teacher's section; logs `ATTENDANCE_RECORDED`
+- [x] [app/actions/teacher/grades.ts](app/actions/teacher/grades.ts) — `recordGradeAction`: single grade create, rejects adviser-only assignments (no subjectId), verifies enrollment belongs to section; logs `GRADE_RECORDED`
+- [x] [app/actions/teacher/behavioral.ts](app/actions/teacher/behavioral.ts) — `recordBehavioralAction`: single incident create with `requireRole("TEACHER")`; logs `BEHAVIORAL_INCIDENT_RECORDED`
+- All three call `revalidatePath` after writing.
+
+### Pages rewritten
+- [x] [app/teacher/my-classes/page.tsx](app/teacher/my-classes/page.tsx) — server component, fetches from DB, renders cards keyed by `assignmentId`. Adviser badge surfaces from `isAdviser` flag.
+- [x] [app/teacher/my-classes/[classId]/page.tsx](app/teacher/my-classes/%5BclassId%5D/page.tsx) — server component fetches everything in parallel, passes to a single client component.
+- [x] [components/roles/teacher/class-detail.tsx](components/roles/teacher/class-detail.tsx) — four tabs (Roster / Attendance / Gradebook / Behavioral). Attendance uses a 14-day side calendar, keyboard quick-keys (P/A/T/E), and bulk save. Gradebook only renders when the assignment has a subject (advisers see it disabled). Behavioral has inline form + chronological list.
+- [x] [app/teacher/student-risk/page.tsx](app/teacher/student-risk/page.tsx) — now a Phase 4 stub.
+- [x] [app/teacher/intervention-feedback/page.tsx](app/teacher/intervention-feedback/page.tsx) — now a Phase 3 stub.
+
+### Deleted (Phase 0 scaffolding, ~2,800 LOC total)
+- `components/roles/teacher/teacher-class-store.ts` (localStorage state engine)
+- `components/roles/teacher/my-classes.tsx` (client component with add/edit modals)
+- `components/roles/teacher/class-roster-view.tsx` (the 720-line tabbed view)
+- `components/roles/teacher/student-risk-overview.tsx`
+- `components/roles/teacher/student-risk-detail.tsx`
+- `components/roles/teacher/student-risk-data.ts`
+- `components/roles/teacher/intervention-feedback.tsx`
+- `app/teacher/student-risk/[classId]/` (nested route)
+- Teacher localStorage cleanup removed from logout flows (counselor cleanup stays until 2d).
+
+### Phase 2c Definition of Done — Verified 2026-05-14
+- [x] Teacher logs in, sees only their assigned section's students (Mr. Reyes → 15 Newton students, not Curie's 5)
+- [x] Class detail page returns **200** for own assignment, **404** for bogus id, **404** for another teacher's assignment
+- [x] Stale `student-risk` nested route deleted; root `student-risk` route renders stub
+- [x] Attendance write: 15 enrollments upserted in one transaction, `ATTENDANCE_RECORDED` audit row created
+- [x] Grade write: single grade row created with `recordedById = teacher`, `GRADE_RECORDED` audit row created
+- [x] Behavioral write: single record created, `BEHAVIORAL_INCIDENT_RECORDED` audit row created
+- [x] Typecheck clean — the entire `teacher-class-store.ts` error category that haunted Phases 1, 1.5, 2a, 2b is now **eliminated**
+
+### Phase 2c retrospective
+- **Two-layer page split** (server-side data fetch + single client component with tabs) keeps the UI snappy and the DB queries explicit. The client component receives plain serializable props — no Prisma types crossing the boundary.
+- **Query-layer RBAC scales easily.** `getTeacherClassDetail` is parameterized by `userId`; nothing the client passes can override that filter. The 404-on-other-teacher's-assignment behavior comes for free from the WHERE clause.
+- **Keyboard-driven attendance** is preserved from the original UI but with one fewer layer of indirection. The original used localStorage updates per keystroke; the new version uses local state + a single bulk save. Less DB chatter, same UX.
+- **Removed `student-risk-detail.tsx` and friends** rather than stubbing in place. They were tangled with the old data model — rebuilding them in Phase 4 against real data is cleaner than patching now.
+- **Total deletion** of localStorage-backed scaffolding for teachers: from ~2,800 LOC of mock state to zero. Counselor module is next (2d).
+
+---
+
 ## Phase 2 — Data Capture & Import *(Week 2)*
 
 **Goal:** Teachers can record daily data; admin can bulk-import. All data is year-scoped and RBAC-respected.
