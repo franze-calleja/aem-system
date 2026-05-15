@@ -1,7 +1,7 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-15 (Phase 3 substantially complete — 3.1 / 3.2 / 3.3 / 3.4 / 3.5 / 3.6 all shipped)
-**Next session starts at:** Phase 3 cleanup OR Phase 5 — pick one. Phase 3 deferrals: (1) revision-mode edit form for counselor Incorporate, (2) auto-detect significant change (scope/type/duration), (3) principal Interim Revision UI. Phase 5 (Dashboards) is unblocked: risk distribution + outcome tracking against active interventions is now feasible.
+**Last session ended:** 2026-05-15 (Phase 3 fully complete — 3.1 / 3.2 / 3.3 / 3.4 / 3.5 / 3.6 + revision-mode edit form + auto-significant detection + principal Interim Revision UI all shipped)
+**Next session starts at:** Phase 5 (Dashboards) — school-wide risk distribution, cohort/cross-year views, bias monitoring. Phase 4 risk data + Phase 3 intervention data are both flowing; the principal dashboard surface is the next high-leverage build. Phase 6 (AI Layer / Gemini) is the alternative if the user wants narrative explanations first.
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

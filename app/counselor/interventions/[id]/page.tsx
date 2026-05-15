@@ -54,13 +54,25 @@ export default async function CounselorInterventionDetailPage({
               </p>
             )}
           </div>
-          <span
-            className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
-              STATUS_TONE[intervention.status] ?? "border-slate-200 bg-slate-50 text-slate-600"
-            }`}
-          >
-            {intervention.status.replace(/_/g, " ")}
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                STATUS_TONE[intervention.status] ?? "border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+            >
+              {intervention.status.replace(/_/g, " ")}
+            </span>
+            {intervention.ownerId === session.user.id &&
+              intervention.status !== "CANCELLED" &&
+              intervention.status !== "COMPLETED" && (
+                <Link
+                  href={`/counselor/interventions/${intervention.id}/edit`}
+                  className="rounded-lg border border-slate-300 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
+                >
+                  Edit plan
+                </Link>
+              )}
+          </div>
         </div>
       </header>
 

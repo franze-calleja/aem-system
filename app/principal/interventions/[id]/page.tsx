@@ -112,6 +112,23 @@ export default async function PrincipalInterventionDetailPage({
           <ApprovalActions interventionId={intervention.id} />
         </section>
       )}
+
+      {intervention.status === "ACTIVE" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Interim revision
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Use only when the owning counselor is unavailable and the plan needs urgent change.
+          </p>
+          <Link
+            href={`/principal/interventions/${intervention.id}/edit`}
+            className="mt-3 inline-block rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 hover:bg-amber-100"
+          >
+            Open interim revision form
+          </Link>
+        </section>
+      )}
     </div>
   );
 }

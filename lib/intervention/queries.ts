@@ -409,6 +409,61 @@ export async function getPendingApprovals(
   }));
 }
 
+// ─── Editable snapshot (for the edit form) ──────────────────────────────────
+
+export type EditableIntervention = {
+  interventionId: string;
+  status: InterventionStatus;
+  ownerId: string;
+  scope: PatternScope;
+  scopeTargetId: string;
+  type: InterventionType;
+  startDate: string;
+  endDate: string | null;
+  schedule: string | null;
+  accommodations: string | null;
+  staffActions: string | null;
+  targetOutcomes: string | null;
+  rationale: string;
+  counselingContext: string | null;
+};
+
+/**
+ * Returns the full editable snapshot of an intervention. Callers must be
+ * authorised to edit (counselor owner OR principal — checked here). Returns
+ * null when unauthorised or not found.
+ */
+export async function getEditableIntervention(
+  id: string,
+  viewerRole: Role,
+  viewerUserId: string,
+): Promise<EditableIntervention | null> {
+  const row = await prisma.intervention.findUnique({
+    where: { id },
+    include: { sensitive: true },
+  });
+  if (!row) return null;
+  if (viewerRole === "COUNSELOR" && row.ownerId !== viewerUserId) return null;
+  if (viewerRole !== "COUNSELOR" && viewerRole !== "PRINCIPAL") return null;
+
+  return {
+    interventionId: row.id,
+    status: row.status,
+    ownerId: row.ownerId,
+    scope: row.scope,
+    scopeTargetId: row.scopeTargetId,
+    type: row.type,
+    startDate: row.startDate.toISOString().slice(0, 10),
+    endDate: row.endDate?.toISOString().slice(0, 10) ?? null,
+    schedule: row.schedule,
+    accommodations: row.accommodations,
+    staffActions: row.staffActions,
+    targetOutcomes: row.targetOutcomes,
+    rationale: row.sensitive?.rationale ?? "",
+    counselingContext: row.sensitive?.counselingContext ?? null,
+  };
+}
+
 // ─── Counselor feedback queue ───────────────────────────────────────────────
 
 export type FeedbackQueueRow = {

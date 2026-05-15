@@ -484,10 +484,11 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Three server actions in [app/actions/teacher/intervention-feedback.ts](app/actions/teacher/intervention-feedback.ts): `logSessionAction` (OBSERVATION), `submitRevisionRequestAction` (REVISION_REQUEST), `submitOutcomeObservationAction` (OUTCOME_OBSERVATION). Each verifies the teacher's scope before writing.
 - [x] Counselor → Feedback Queue wired to real API ([app/counselor/feedback/page.tsx](app/counselor/feedback/page.tsx) + [components/counselor/feedback-disposition.tsx](components/counselor/feedback-disposition.tsx) + [app/actions/counselor/feedback.ts](app/actions/counselor/feedback.ts))
 - [x] Disposition actions: Acknowledge / Incorporate / Dismiss (mapped from spec's "Discuss" → "Dismiss" until in-app messaging lands)
-- [x] Incorporate creates an `InterventionRevision` with `triggeringNoteId` pointing back to the note + audit `INTERVENTION_REVISED`. Note moves OPEN → INCORPORATED.
-- [ ] **Deferred (next slice):** revision-mode edit form (current Incorporate captures the note content as the diff but does not open the plan for editing).
-- [ ] **Deferred (next slice):** auto-detect significant change (scope / type / duration-beyond-threshold). For now revisions are flagged `isSignificant=true` only on principal rejection; counselor Incorporate writes `isSignificant=false`. Re-approval routing waits until the revision-mode form ships.
-- [ ] **Deferred (next slice):** Interim Revision (principal-only, `isInterim=true`) — schema supports it but no UI yet.
+- [x] Incorporate now opens the revision-mode edit form (`/counselor/interventions/[id]/edit?fromNote=…`); saving creates the `InterventionRevision` with `triggeringNoteId` and flips the note INCORPORATED in one transaction. ✅ *(2026-05-15 follow-up slice)*
+- [x] Revision-mode edit form ([components/counselor/intervention-edit-form.tsx](components/counselor/intervention-edit-form.tsx)) — shared between counselor (normal) and principal (interim). ✅
+- [x] Auto-detect significant change ([lib/intervention/diff.ts](lib/intervention/diff.ts) — `detectSignificantChange`: scope / type / scopeTargetId / duration > 30 days). Significant changes on broader-scope ACTIVE plans automatically route back to PENDING_APPROVAL via `shouldReenterApproval`. ✅
+- [x] Interim Revision (principal-only, `isInterim=true`) — [app/principal/interventions/[id]/edit/page.tsx](app/principal/interventions/[id]/edit/page.tsx) + [app/actions/principal/interventions.ts](app/actions/principal/interventions.ts) `interimReviseInterventionAction`; principal detail page surfaces the "Open interim revision form" button on ACTIVE plans. Audit: `INTERIM_REVISION` + `INTERVENTION_REVISED`. ✅
+- [x] Verification: [scripts/verify-revision-mode.ts](scripts/verify-revision-mode.ts) — confirms minor revision stays ACTIVE, significant revision on SECTION plan flips to PENDING_APPROVAL, principal interim writes `isInterim=true`
 
 ### 3.6 Visibility Enforcement *(✅ 2026-05-15)*
 - [x] `getIntervention(id, viewerRole, viewerUserId)` in [lib/intervention/queries.ts](lib/intervention/queries.ts) returns `null` when the viewer cannot see the intervention at all
@@ -501,7 +502,7 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Counselor creates individual intervention end-to-end; teacher sees public fields only (no rationale) — verified via [scripts/verify-phase-3-4-5-6.ts](scripts/verify-phase-3-4-5-6.ts)
 - [x] Teacher submits revision request; counselor incorporates; `InterventionRevision` created linked to the note (`triggeringNoteId`) — verified
 - [x] Section-wide intervention stays PENDING_APPROVAL until principal approves; becomes ACTIVE after approval — verified (script approved the SECTION intervention; status now ACTIVE)
-- [ ] Significant revision to active section-wide plan triggers re-approval — **deferred with the revision-mode form**
+- [x] Significant revision to active section-wide plan triggers re-approval — verified via `scripts/verify-revision-mode.ts`
 - [x] Teacher hitting counseling notes API directly → 403/empty (enforced at query layer) — verified in 3.2
 - [x] Recommendation draft "Open in Builder" pre-fills intervention builder; on save marks draft as INSTANTIATED — verified in 3.3
 - [x] `npx tsc --noEmit` clean; `npm run lint` clean (one pre-existing unrelated warning)

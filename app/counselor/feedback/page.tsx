@@ -80,7 +80,7 @@ export default async function CounselorFeedbackPage() {
                 by {n.authorName} · {new Date(n.createdAt).toLocaleString()}
               </p>
 
-              <FeedbackDisposition noteId={n.id} />
+              <FeedbackDisposition noteId={n.id} interventionId={n.interventionId} />
             </li>
           ))}
         </ul>
