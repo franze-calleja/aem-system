@@ -498,6 +498,12 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] `getInterventionsForTeacher(userId, schoolYearId)` returns only ACTIVE/PENDING interventions the teacher is in scope for (public fields, no sensitive)
 - [x] Section adviser elevation: an adviser is just a `TeacherAssignment` row with `isAdviser=true`; their `sectionId` is included in the assignment-based predicate, so they see public fields for their advisory section automatically
 
+### 3.7 Intervention COMPLETE flow + per-participant outcomes *(✅ 2026-05-15 follow-up)*
+- [x] `completeInterventionAction` in [app/actions/counselor/interventions.ts](app/actions/counselor/interventions.ts) — transactional: ACTIVE → COMPLETED + per-participant `outcome` set + `InterventionRevision` row for the transition + audit `INTERVENTION_REVISED` with outcome distribution metadata
+- [x] [components/counselor/complete-intervention-form.tsx](components/counselor/complete-intervention-form.tsx) — collapsible "Mark complete" form on the counselor intervention detail page. Per-participant outcome dropdown (IMPROVING / STABLE / DECLINING / COMPLETED) + optional notes
+- [x] Detail page now displays outcome badges next to each participant once set
+- [x] Verification script: [scripts/verify-complete-flow.ts](scripts/verify-complete-flow.ts) — round-robins outcomes across participants and confirms the transition
+
 ### Phase 3 Definition of Done
 - [x] Counselor creates individual intervention end-to-end; teacher sees public fields only (no rationale) — verified via [scripts/verify-phase-3-4-5-6.ts](scripts/verify-phase-3-4-5-6.ts)
 - [x] Teacher submits revision request; counselor incorporates; `InterventionRevision` created linked to the note (`triggeringNoteId`) — verified
@@ -581,7 +587,7 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 ### 5.2 Counselor Dashboards *(✅ 2026-05-15)*
 - [x] Caseload Dashboard wired to real risk data — landed in Phase 4 ([app/counselor/caseload/page.tsx](app/counselor/caseload/page.tsx))
 - [x] Pattern Detection Inbox across all four scopes — [app/counselor/patterns/page.tsx](app/counselor/patterns/page.tsx) + [lib/patterns/queries.ts](lib/patterns/queries.ts) + [components/counselor/pattern-disposition.tsx](components/counselor/pattern-disposition.tsx). Disposition (Resolve / Dismiss) writes back to `PatternMatch.status` and audits via [app/actions/counselor/patterns.ts](app/actions/counselor/patterns.ts).
-- [ ] Outcome Tracking view — **deferred**: no ParticipationOutcome rows exist yet (outcomes aren't recorded until interventions close). Will land once the COMPLETE flow ships.
+- [x] Outcome Tracking view — landed alongside the COMPLETE flow on [/counselor/interventions](app/counselor/interventions/page.tsx). Per-intervention participation outcome distribution bar (IMPROVING / COMPLETED / STABLE / DECLINING / UNSET). ✅ *(2026-05-15 follow-up)*
 
 ### 5.3 Principal Dashboards *(✅ 2026-05-15)*
 - [x] School-Wide Dashboard at [/principal/dashboard](app/principal/dashboard/page.tsx) with drill-down by grade, section, demographic
@@ -621,14 +627,15 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Aggressive caching by content hash — new `AICache` model (migration `20260515023001_add_ai_cache`); SHA-256 over `model::prompt`. Cached rows are immutable.
 - [x] Graceful fallback matrix: `no_key` / `quota` (HTTP 429) / `network` / `empty_response` / `consent_revoked`. Each surfaces a different user-facing message via `fallbackMessage`; the surrounding UI keeps the algorithmic explainability panel visible regardless.
 - [x] Risk narrative generator ([lib/ai/narrative.ts](lib/ai/narrative.ts)) — anonymised prompt (first name + grade only, no LRN), 2–3 sentence guideline.
-- [ ] Recommendation narrative generator — **deferred (follow-up)**. Infrastructure ready; just needs a prompt + wire-up on recommendation drafts.
-- [ ] Section / grade / school summary generator for principal — **deferred (follow-up)**. Same infra applies.
+- [x] Recommendation narrative generator ([lib/ai/narrative.ts](lib/ai/narrative.ts) `generateRecommendationNarrative`) — surfaced on the counselor [/counselor/interventions](app/counselor/interventions/page.tsx) Open Recommendations queue. Each draft gets a 3–4 sentence Gemini narrative below the algorithmic rationale; cached separately per draft via content hash. ✅ *(2026-05-15 follow-up)*
+- [x] School summary generator for principal ([lib/ai/narrative.ts](lib/ai/narrative.ts) `generateSchoolSummary`) — banner narrative at the top of [/principal/dashboard](app/principal/dashboard/page.tsx). Cached separately per (year, total, distribution, queue depth, top-grade rates) signature. ✅ *(2026-05-15 follow-up)*
+- [ ] AI Literacy Assistant chat — **deferred to final follow-up.** Genuinely a session of its own (chat session API, multi-turn UI, page-context awareness).
 
 ### 6.2 AI Literacy Features *(✅ 2026-05-15)*
 - [x] Interactive Risk Simulator ("What-If") at [/counselor/what-if](app/counselor/what-if/page.tsx) + [components/counselor/what-if-simulator.tsx](components/counselor/what-if-simulator.tsx). Reuses the production `computeRiskScore` engine via [app/actions/risk/what-if.ts](app/actions/risk/what-if.ts) with synthesised Prisma-shaped rows — so the simulator output is *exactly* what the engine would produce. Debounced 250ms recompute on input change.
 - [x] Decision Audit Trail at [/counselor/students/[id]/audit](app/counselor/students/[id]/audit/page.tsx) — chronological merge of `RiskAssessment` + `PatternMatch` + `RecommendationDraft` + `Intervention` + `InterventionRevision` + `InterventionNote` events for one student in one SY. Cross-role: COUNSELOR + PRINCIPAL.
 - [x] Consent-aware narrative gating: `getStudentProfile` already returns consent records; the student profile page checks for `AI_ANALYSIS` revoked status and short-circuits the Gemini call. Revocation does not affect the explainability panel — algorithmic output remains visible.
-- [ ] AI Literacy Assistant (chat, page-context-aware) — **deferred (follow-up)**. Needs Gemini chat session API + UI shell.
+- [ ] AI Literacy Assistant (chat, page-context-aware) — **still deferred.** Needs Gemini chat session API + UI shell.
 
 ### Phase 6 Definition of Done
 - [x] Risk score shows both factor breakdown (always) and Gemini narrative (when AI consent active + key configured) — verified: counselor + principal student profile pages render the explainability panel + a narrative panel. Without a key, the panel shows the "AI narrative disabled" fallback note instead of breaking.

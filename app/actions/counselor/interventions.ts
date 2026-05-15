@@ -355,6 +355,94 @@ export async function updateInterventionAction(
   return { ok: true, interventionId: existing.id, isSignificant, reenteredApproval };
 }
 
+// ─── Complete intervention ──────────────────────────────────────────────────
+
+const OUTCOME = z.enum(["IMPROVING", "STABLE", "DECLINING", "COMPLETED"]);
+
+const completeSchema = z.object({
+  interventionId: z.string().min(1),
+  notes: z.string().trim().max(2000).optional().or(z.literal("")),
+  outcomes: z
+    .array(z.object({ participationId: z.string().min(1), outcome: OUTCOME }))
+    .min(1, "At least one participant outcome is required."),
+});
+
+export type CompleteInterventionResult =
+  | { ok: true; interventionId: string }
+  | { ok: false; error: string };
+
+export async function completeInterventionAction(
+  input: unknown,
+): Promise<CompleteInterventionResult> {
+  const session = await requireRole("COUNSELOR");
+
+  const parsed = completeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join("; ") };
+  }
+  const data = parsed.data;
+
+  const intervention = await prisma.intervention.findUnique({
+    where: { id: data.interventionId },
+    include: { participations: { select: { id: true } } },
+  });
+  if (!intervention) return { ok: false, error: "Intervention not found." };
+  if (intervention.ownerId !== session.user.id) {
+    return { ok: false, error: "Only the owning counselor can mark this plan complete." };
+  }
+  if (intervention.status !== "ACTIVE") {
+    return { ok: false, error: `Cannot complete a ${intervention.status.toLowerCase()} plan.` };
+  }
+
+  // Ensure every outcome row belongs to this intervention.
+  const validIds = new Set(intervention.participations.map((p) => p.id));
+  for (const o of data.outcomes) {
+    if (!validIds.has(o.participationId)) {
+      return { ok: false, error: "Outcome references a participation not on this plan." };
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.intervention.update({
+      where: { id: intervention.id },
+      data: { status: "COMPLETED", endDate: intervention.endDate ?? new Date() },
+    });
+    for (const o of data.outcomes) {
+      await tx.interventionParticipation.update({
+        where: { id: o.participationId },
+        data: { outcome: o.outcome },
+      });
+    }
+    await tx.interventionRevision.create({
+      data: {
+        interventionId: intervention.id,
+        changedById: session.user.id,
+        diff: { status: { from: "ACTIVE", to: "COMPLETED" } },
+        reason: emptyToNull(data.notes) ?? "Marked complete by counselor.",
+        isSignificant: false,
+      },
+    });
+  });
+
+  await logAudit({
+    action: "INTERVENTION_REVISED",
+    userId: session.user.id,
+    resourceType: "Intervention",
+    resourceId: intervention.id,
+    metadata: {
+      transition: "ACTIVE→COMPLETED",
+      outcomes: data.outcomes.reduce<Record<string, number>>((acc, o) => {
+        acc[o.outcome] = (acc[o.outcome] ?? 0) + 1;
+        return acc;
+      }, {}),
+    },
+  });
+
+  revalidatePath("/counselor/interventions");
+  revalidatePath(`/counselor/interventions/${intervention.id}`);
+  return { ok: true, interventionId: intervention.id };
+}
+
 type ScopeResolution =
   | { ok: true; participantEnrollmentIds: string[] }
   | { ok: false; error: string };

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getInterventionsForYear } from "@/lib/intervention/queries";
+import { getInterventionsForYear, getOutcomeTracking } from "@/lib/intervention/queries";
 import { getOpenRecommendations } from "@/lib/risk/queries";
+import { prisma } from "@/lib/prisma";
+import { generateRecommendationNarrative, fallbackMessage } from "@/lib/ai/narrative";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "border-slate-200 bg-slate-50 text-slate-600",
@@ -30,10 +32,53 @@ export default async function CounselorInterventionsPage() {
     );
   }
 
-  const [interventions, recommendations] = await Promise.all([
+  const [interventions, recommendations, outcomes] = await Promise.all([
     getInterventionsForYear(sy.id),
     getOpenRecommendations(sy.id),
+    getOutcomeTracking(sy.id),
   ]);
+
+  // Resolve scope labels for recommendations + fire narrative generators in
+  // parallel. The wrapper caches by content hash so subsequent renders skip
+  // the SDK; the algorithmic rationale below is always visible regardless.
+  const studentIds = new Set<string>();
+  const sectionIds = new Set<string>();
+  for (const r of recommendations) {
+    if (r.scope === "STUDENT") studentIds.add(r.scopeTargetId);
+    if (r.scope === "SECTION") sectionIds.add(r.scopeTargetId);
+  }
+  const [students, sections] = await Promise.all([
+    studentIds.size === 0
+      ? Promise.resolve([])
+      : prisma.student.findMany({
+          where: { id: { in: [...studentIds] } },
+          select: { id: true, firstName: true, lastName: true },
+        }),
+    sectionIds.size === 0
+      ? Promise.resolve([])
+      : prisma.section.findMany({
+          where: { id: { in: [...sectionIds] }, schoolYearId: sy.id },
+          select: { id: true, gradeLevel: true, name: true },
+        }),
+  ]);
+  const labelMap = new Map<string, string>();
+  for (const s of students) labelMap.set(`STUDENT:${s.id}`, `${s.lastName}, ${s.firstName}`);
+  for (const sec of sections) labelMap.set(`SECTION:${sec.id}`, `${sec.gradeLevel} · ${sec.name}`);
+
+  const recommendationNarratives = await Promise.all(
+    recommendations.map((r) =>
+      generateRecommendationNarrative({
+        scope: r.scope as "STUDENT" | "SECTION" | "GRADE" | "SCHOOL",
+        scopeLabel:
+          labelMap.get(`${r.scope}:${r.scopeTargetId}`) ??
+          (r.scope === "GRADE" ? r.scopeTargetId : r.scope === "SCHOOL" ? "School-wide" : r.scopeTargetId),
+        suggestedType: r.suggestedType,
+        rationale: r.rationale,
+        evidence: r.evidence,
+        triggeringRuleId: r.triggeringRuleId,
+      }),
+    ),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,27 +113,97 @@ export default async function CounselorInterventionsPage() {
           </p>
         ) : (
           <ul className="mt-4 divide-y divide-slate-100">
-            {recommendations.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {SCOPE_LABEL[r.scope] ?? r.scope} · {r.suggestedType.replace(/_/g, " ")}
-                    {r.triggeringRuleId && (
-                      <span className="ml-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                        {r.triggeringRuleId.replace(/_/g, " ")}
-                      </span>
-                    )}
+            {recommendations.map((r, i) => {
+              const narrative = recommendationNarratives[i];
+              return (
+                <li key={r.id} className="flex flex-col gap-3 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {SCOPE_LABEL[r.scope] ?? r.scope} · {r.suggestedType.replace(/_/g, " ")}
+                        {r.triggeringRuleId && (
+                          <span className="ml-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                            {r.triggeringRuleId.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700">{r.rationale}</p>
+                    </div>
+                    <Link
+                      href={`/counselor/interventions/new?fromRecommendation=${r.id}`}
+                      className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
+                    >
+                      Open in Builder
+                    </Link>
+                  </div>
+                  {narrative.ok ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                        AI narrative {narrative.cached ? "(cached)" : ""}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-sky-900">{narrative.text}</p>
+                    </div>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                      {fallbackMessage(narrative.reason)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <header>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Outcome tracking
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Participation outcomes from completed plans. Feeds the interventionHistory sub-score on the next risk recompute.
+          </p>
+        </header>
+        {outcomes.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400">
+            No completed interventions yet. Outcomes populate when a counselor marks a plan complete.
+          </p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-3">
+            {outcomes.map((o) => {
+              const total = o.total || 1;
+              return (
+                <li key={o.interventionId} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <Link
+                      href={`/counselor/interventions/${o.interventionId}`}
+                      className="text-sm font-medium text-slate-900 hover:text-amber-700"
+                    >
+                      {o.scopeLabel}
+                    </Link>
+                    <p className="text-[11px] text-slate-500">
+                      {SCOPE_LABEL[o.scope] ?? o.scope} · {o.type.replace(/_/g, " ")}
+                      {o.endDate ? ` · ended ${o.endDate}` : ""}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <span className="bg-emerald-500" style={{ width: `${(o.improving / total) * 100}%` }} title={`Improving ${o.improving}`} />
+                    <span className="bg-emerald-300" style={{ width: `${(o.completed / total) * 100}%` }} title={`Completed ${o.completed}`} />
+                    <span className="bg-slate-300" style={{ width: `${(o.stable / total) * 100}%` }} title={`Stable ${o.stable}`} />
+                    <span className="bg-rose-500" style={{ width: `${(o.declining / total) * 100}%` }} title={`Declining ${o.declining}`} />
+                    <span className="bg-slate-100" style={{ width: `${(o.unset / total) * 100}%` }} title={`Unset ${o.unset}`} />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {o.total} participant{o.total === 1 ? "" : "s"} ·
+                    <span className="ml-1 text-emerald-700">IMPROVING {o.improving}</span> ·
+                    <span className="ml-1 text-emerald-600">COMPLETED {o.completed}</span> ·
+                    <span className="ml-1 text-slate-600">STABLE {o.stable}</span> ·
+                    <span className="ml-1 text-rose-700">DECLINING {o.declining}</span>
+                    {o.unset > 0 && <span className="ml-1 text-slate-400">UNSET {o.unset}</span>}
                   </p>
-                  <p className="mt-1 text-sm text-slate-700">{r.rationale}</p>
-                </div>
-                <Link
-                  href={`/counselor/interventions/new?fromRecommendation=${r.id}`}
-                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
-                >
-                  Open in Builder
-                </Link>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

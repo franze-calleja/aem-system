@@ -47,4 +47,88 @@ export async function generateRiskNarrative(input: RiskNarrativeInput): Promise<
   });
 }
 
+// ─── Recommendation narrative ───────────────────────────────────────────────
+
+type RecommendationNarrativeInput = {
+  scope: "STUDENT" | "SECTION" | "GRADE" | "SCHOOL";
+  scopeLabel: string;
+  suggestedType: string;
+  rationale: string; // algorithmic rationale (deterministic template)
+  evidence: Record<string, unknown>;
+  triggeringRuleId: string | null;
+  consentRevoked?: boolean;
+};
+
+export async function generateRecommendationNarrative(
+  input: RecommendationNarrativeInput,
+): Promise<GenerateResult> {
+  const { scope, scopeLabel, suggestedType, rationale, evidence, triggeringRuleId, consentRevoked } =
+    input;
+
+  const prompt = [
+    `You are a school-counseling assistant. Reframe an algorithmic intervention recommendation as a 3–4 sentence narrative a counselor can read to decide whether to act. Stay factual, reference the evidence, and end with a single concrete first step. No headings, no bullets.`,
+    ``,
+    `Scope: ${scope} — ${scopeLabel}`,
+    `Suggested intervention type: ${suggestedType.replace(/_/g, " ")}`,
+    `Triggering rule: ${triggeringRuleId ?? "(none)"}`,
+    `Algorithm rationale: ${rationale}`,
+    `Evidence (JSON): ${JSON.stringify(evidence)}`,
+    ``,
+    `Write the narrative now.`,
+  ].join("\n");
+
+  return generateText({
+    prompt,
+    kind: "RECOMMENDATION_NARRATIVE",
+    consentRevoked,
+  });
+}
+
+// ─── School summary (principal dashboard) ───────────────────────────────────
+
+type SchoolSummaryInput = {
+  schoolYearLabel: string;
+  total: number;
+  low: number;
+  moderate: number;
+  high: number;
+  unscored: number;
+  pendingApprovals: number;
+  openRecommendations: number;
+  topGradeLevels: Array<{ label: string; highRate: number; total: number }>;
+};
+
+export async function generateSchoolSummary(
+  input: SchoolSummaryInput,
+): Promise<GenerateResult> {
+  const {
+    schoolYearLabel,
+    total,
+    low,
+    moderate,
+    high,
+    unscored,
+    pendingApprovals,
+    openRecommendations,
+    topGradeLevels,
+  } = input;
+
+  const prompt = [
+    `You are a school-counseling assistant. Write a 3–4 sentence executive summary of a school's current risk picture for the principal. Lead with the headline number, mention one notable distribution pattern, name the operational backlog (approvals + open recommendations), and close with the single most actionable item. No headings or bullets.`,
+    ``,
+    `School year: ${schoolYearLabel}`,
+    `Enrolled: ${total} (LOW=${low}, MODERATE=${moderate}, HIGH=${high}, unscored=${unscored})`,
+    `Approval queue: ${pendingApprovals} broader-scope interventions pending principal approval`,
+    `Open recommendations: ${openRecommendations}`,
+    `Grade-level HIGH rates: ${topGradeLevels.map((g) => `${g.label}=${(g.highRate * 100).toFixed(1)}% (${g.total})`).join(", ") || "n/a"}`,
+    ``,
+    `Write the summary now.`,
+  ].join("\n");
+
+  return generateText({
+    prompt,
+    kind: "SCHOOL_SUMMARY",
+  });
+}
+
 export { fallbackMessage };

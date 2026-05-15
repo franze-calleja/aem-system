@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/session";
 import { getIntervention } from "@/lib/intervention/queries";
+import CompleteInterventionForm from "@/components/counselor/complete-intervention-form";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "border-slate-200 bg-slate-50 text-slate-600",
@@ -117,12 +118,50 @@ export default async function CounselorInterventionDetailPage({
             {intervention.participants.map((p) => (
               <li key={p.enrollmentId} className="flex items-center justify-between border-b border-slate-100 py-1.5">
                 <span className="text-slate-700">{p.studentName}</span>
-                <span className="text-xs text-slate-400 font-mono">{p.lrn}</span>
+                <span className="flex items-center gap-2 text-xs">
+                  {p.outcome && (
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                      p.outcome === "IMPROVING" || p.outcome === "COMPLETED"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : p.outcome === "DECLINING"
+                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          : "border-slate-200 bg-slate-50 text-slate-600"
+                    }`}>
+                      {p.outcome}
+                    </span>
+                  )}
+                  <span className="font-mono text-slate-400">{p.lrn}</span>
+                </span>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {intervention.status === "ACTIVE" && intervention.ownerId === session.user.id && (
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">
+            Close out
+          </h2>
+          <p className="mt-1 text-xs text-sky-700/80">
+            Mark the plan complete and record an outcome for each participant.
+          </p>
+          <div className="mt-3">
+            <CompleteInterventionForm
+              interventionId={intervention.id}
+              participants={intervention.participants.map((p) => ({
+                participationId: p.participationId,
+                studentName: p.studentName,
+                lrn: p.lrn,
+                currentOutcome:
+                  p.outcome === "IMPROVING" || p.outcome === "STABLE" || p.outcome === "DECLINING" || p.outcome === "COMPLETED"
+                    ? p.outcome
+                    : null,
+              }))}
+            />
+          </div>
+        </section>
+      )}
     </div>
   );
 }

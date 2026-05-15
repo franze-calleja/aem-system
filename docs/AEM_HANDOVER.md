@@ -1,9 +1,9 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-15 (Phase 6 partial — Gemini infrastructure + risk narrative + What-If simulator + Decision Audit Trail all shipped; recommendation narratives + principal summaries + AI literacy chat deferred)
-**Next session starts at:** Phase 7 (governance polish + demo data) **OR** Phase 6 follow-up (recommendation narrative + principal summaries + AI literacy chat).
+**Last session ended:** 2026-05-15 (Gemini key configured + recommendation narrative + principal school summary + intervention COMPLETE flow + outcome tracking view all shipped. AI Literacy Chat remains deferred.)
+**Next session starts at:** Phase 7 (governance polish + demo data) — most natural next step. Lands the principal Risk Override workflow, scheduled engine recompute, admin-tunable bias thresholds, "How does this work?" literacy pages, and historical-SY demo data (which also unblocks Phase 5.4 cohort analysis). The remaining AI Literacy Chat could also be picked up as a smaller alternative.
 
-**Gemini key**: user will paste `GEMINI_API_KEY=...` into `.env` from Google AI Studio (https://aistudio.google.com/app/apikey, NOT GCP Console). With the key, every existing risk narrative call starts producing real text without code changes; cache hits store in `AICache`. Without the key, all surfaces show graceful "AI narrative disabled" fallback notes.
+**Gemini status**: `GEMINI_API_KEY` configured; `AICache` table now has RISK_NARRATIVE + RECOMMENDATION_NARRATIVE + SCHOOL_SUMMARY rows. Cache hits are ~30× faster than fresh calls. Without the key, every surface shows the "AI narrative disabled" fallback note instead of breaking.
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

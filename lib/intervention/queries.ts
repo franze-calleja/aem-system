@@ -154,6 +154,7 @@ export type InterventionDetail = {
   // Sensitive — null when the viewer is not authorised.
   sensitive: { rationale: string; counselingContext: string | null } | null;
   participants: Array<{
+    participationId: string;
     enrollmentId: string;
     studentName: string;
     lrn: string;
@@ -241,6 +242,7 @@ export async function getIntervention(
         : null,
     participants: showParticipants
       ? row.participations.map((p) => ({
+          participationId: p.id,
           enrollmentId: p.enrollmentId,
           studentName: `${p.enrollment.student.lastName}, ${p.enrollment.student.firstName}`,
           lrn: p.enrollment.student.lrn,
@@ -407,6 +409,60 @@ export async function getPendingApprovals(
         }
       : null,
   }));
+}
+
+// ─── Outcome tracking (counselor /interventions view) ──────────────────────
+
+export type OutcomeTrackingRow = {
+  interventionId: string;
+  scope: PatternScope;
+  scopeLabel: string;
+  type: InterventionType;
+  endDate: string | null;
+  improving: number;
+  stable: number;
+  declining: number;
+  completed: number;
+  unset: number;
+  total: number;
+};
+
+export async function getOutcomeTracking(schoolYearId: string): Promise<OutcomeTrackingRow[]> {
+  const rows = await prisma.intervention.findMany({
+    where: { schoolYearId, status: "COMPLETED" },
+    include: {
+      participations: { select: { outcome: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+  const labelMap = await resolveScopeLabels(rows, schoolYearId);
+  return rows.map((r) => {
+    let improving = 0,
+      stable = 0,
+      declining = 0,
+      completed = 0,
+      unset = 0;
+    for (const p of r.participations) {
+      if (p.outcome === "IMPROVING") improving++;
+      else if (p.outcome === "STABLE") stable++;
+      else if (p.outcome === "DECLINING") declining++;
+      else if (p.outcome === "COMPLETED") completed++;
+      else unset++;
+    }
+    return {
+      interventionId: r.id,
+      scope: r.scope,
+      scopeLabel: labelMap.get(`${r.scope}:${r.scopeTargetId}`) ?? r.scopeTargetId,
+      type: r.type,
+      endDate: r.endDate?.toISOString().slice(0, 10) ?? null,
+      improving,
+      stable,
+      declining,
+      completed,
+      unset,
+      total: r.participations.length,
+    };
+  });
 }
 
 // ─── Editable snapshot (for the edit form) ──────────────────────────────────
