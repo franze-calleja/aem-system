@@ -69,7 +69,7 @@ export default async function CaseloadPage() {
                   </td>
                   <td className="px-3 py-2 text-slate-600">{r.gradeLevel} · {r.sectionName}</td>
                   <td className="px-3 py-2">
-                    <RiskBadge band={r.riskBand} score={r.riskScore} />
+                    <RiskBadge band={r.riskBand} score={r.riskScore} overridden={r.overridden} />
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-400">
                     {r.computedAt ? new Date(r.computedAt).toLocaleDateString() : "—"}

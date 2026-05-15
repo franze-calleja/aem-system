@@ -10,6 +10,7 @@ export type AlgorithmConfigRow = {
   weights: unknown;
   thresholds: unknown;
   ruleConfig: unknown;
+  biasThresholds: unknown;
   isActive: boolean;
   changedById: string | null;
   changedAt: Date;

@@ -658,21 +658,33 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 
 **Goal:** Production-ready demo. Consent, bias monitoring, and final hardening.
 
-### 7.1 Consent Management UI
-- [ ] Admin → Consent Management page
-- [ ] Per-student, per-scope view with revocation action
-- [ ] Revocation degrades features without deleting data
+### 7.1 Consent Management UI *(✅ Phase 2.5)*
+- [x] Admin → Consent Management page — shipped in Phase 2.5
+- [x] Per-student, per-scope view with revocation action
+- [x] Revocation degrades features without deleting data (Phase 6 wired the AI-narrative consent gate)
 
-### 7.2 Bias Monitoring
-- [ ] Schema: `BiasMetric` (computed snapshots)
-- [ ] Dashboard: risk band distribution across sex / learning modality / SPED status
-- [ ] Disparity threshold flags
-- [ ] Principal drill-down
+### 7.2 Bias Monitoring *(✅ 2026-05-15, Phase 7 governance core)*
+- [x] Dashboard: risk band distribution across sex / learning modality / SPED status — landed in Phase 5
+- [x] Disparity threshold flags — landed in Phase 5
+- [x] **Disparity threshold now admin-tunable** — `AlgorithmConfig.biasThresholds.highRateMultiplier` (migration `20260515153207_add_risk_override_governance`). Editable in [admin algorithm form](../components/roles/admin/algorithm-config-form.tsx); read in [principal dashboard](app/principal/dashboard/page.tsx). Default 0.5 (+50%).
+- [x] Principal drill-down — already present via [components/principal/risk-breakdown-table.tsx](components/principal/risk-breakdown-table.tsx)
+- [ ] Schema: `BiasMetric` (computed snapshots) — **deferred**. Current implementation computes on-read, which is fine until volume requires precomputation.
 
-### 7.3 Override Workflow
-- [ ] Principal → Risk Override (mandatory justification)
-- [ ] Override record linked to original assessment
-- [ ] Override visible indicator on student profile
+### 7.3 Override Workflow *(✅ 2026-05-15)*
+- [x] Schema: new `RiskOverride` model (migration `20260515153207_add_risk_override_governance`); snapshots originalScore + originalBand at the moment of override so the override survives engine recomputes
+- [x] Principal → Risk Override server actions ([app/actions/principal/overrides.ts](app/actions/principal/overrides.ts)) — `createRiskOverrideAction` (mandatory justification, audited via `RISK_OVERRIDE`) + `clearRiskOverrideAction`. At most one active override per enrollment is enforced; new override transactionally clears the prior.
+- [x] Override panel + form on principal student profile ([components/principal/risk-override-controls.tsx](components/principal/risk-override-controls.tsx)). Banded radio selector + textarea + apply/clear actions.
+- [x] Override visible indicator wherever risk renders:
+  - **Student profile** (counselor + principal): "Override active" badge in the section header + dedicated override panel showing original band → override band + justification + attribution
+  - **Counselor caseload**: `RiskBadge` extended with `overridden` prop → small "OVR" pill next to the band
+  - Counselor sees the override (so they understand the displayed band) but has no controls — counselor profile page does not pass principal controls
+- [x] Displayed band logic: `getCaseloadWithRisk` and `getLatestRiskForStudent` return the override band when active; the explainability panel still renders the original algorithmic score below for transparency
+- [x] Audit: `RISK_OVERRIDE` enum value used for both create and clear; metadata captures from/to bands + whether a prior override was replaced
+
+### 7.6 DB-level append-only AuditLog *(✅ 2026-05-15)*
+- [x] Postgres trigger `audit_log_prevent_modification` blocks UPDATE + DELETE on `AuditLog` at the database level (migration `20260515153207_add_risk_override_governance`)
+- [x] Belt-and-suspenders: even raw SQL attempts are rejected (verified — see `scripts/verify-overrides-governance.ts`)
+- [x] Closes the Phase 1 known-debt item: "DB-level append-only AuditLog grants — app-layer enforcement only"
 
 ### 7.4 Demo Data
 - [ ] Generate 3 school years of synthetic data (~240 students/year, full grades/attendance/behavior)

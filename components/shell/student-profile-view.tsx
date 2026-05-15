@@ -4,6 +4,7 @@ import type { GenerateResult } from "@/lib/ai/gemini";
 import { fallbackMessage } from "@/lib/ai/gemini";
 import CounselingNoteForm from "@/components/counselor/counseling-note-form";
 import ExplainabilityPanel from "@/components/shell/explainability-panel";
+import RiskOverrideControls from "@/components/principal/risk-override-controls";
 
 type Props = {
   profile: StudentProfileData;
@@ -20,8 +21,18 @@ type Props = {
     band: RiskBandLabel;
     factors: RiskFactors;
     computedAt: string;
+    enrollmentId: string;
     /** AI narrative result — when ok, shown above the panel. When !ok, shows a fallback note. */
     narrative: GenerateResult;
+    override: {
+      id: string;
+      originalScore: number;
+      originalBand: RiskBandLabel;
+      overrideBand: RiskBandLabel;
+      justification: string;
+      overriddenByName: string;
+      createdAt: string;
+    } | null;
   } | null;
 };
 
@@ -275,6 +286,11 @@ export default function StudentProfileView({ profile, viewerRole, counselingNote
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
               Risk Profile
+              {risk.override && (
+                <span className="ml-2 inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-700">
+                  Override active
+                </span>
+              )}
             </h2>
             <a
               href={`/counselor/students/${student.id}/audit`}
@@ -298,10 +314,37 @@ export default function StudentProfileView({ profile, viewerRole, counselingNote
               {fallbackMessage(risk.narrative.reason)}
             </p>
           )}
-          <ExplainabilityPanel score={risk.score} band={risk.band} factors={risk.factors} />
+          {risk.override ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
+                Displayed band reflects principal override
+              </p>
+              <p className="mt-2 text-sm text-rose-900">
+                Algorithmic band <span className="font-mono font-semibold">{risk.override.originalBand}</span> (score {risk.override.originalScore.toFixed(0)}) → override <span className="font-mono font-semibold">{risk.override.overrideBand}</span>
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm italic text-rose-900">
+                “{risk.override.justification}”
+              </p>
+              <p className="mt-2 text-[11px] text-rose-700/80">
+                by {risk.override.overriddenByName} · {new Date(risk.override.createdAt).toLocaleString()}
+              </p>
+            </div>
+          ) : null}
+          <ExplainabilityPanel
+            score={risk.override ? risk.override.originalScore : risk.score}
+            band={risk.override ? risk.override.originalBand : risk.band}
+            factors={risk.factors}
+          />
           <p className="text-[11px] text-slate-400">
             Computed {new Date(risk.computedAt).toLocaleString()}
           </p>
+          {viewerRole === "PRINCIPAL" && (
+            <RiskOverrideControls
+              enrollmentId={risk.enrollmentId}
+              currentBand={risk.band}
+              activeOverride={risk.override}
+            />
+          )}
         </section>
       )}
 

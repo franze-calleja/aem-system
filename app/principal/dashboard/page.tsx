@@ -10,6 +10,7 @@ import {
   getSchoolRiskDistribution,
 } from "@/lib/risk/queries";
 import { generateSchoolSummary, fallbackMessage } from "@/lib/ai/narrative";
+import { prisma } from "@/lib/prisma";
 import RiskBreakdownTable from "@/components/principal/risk-breakdown-table";
 
 export default async function PrincipalDashboardPage() {
@@ -24,14 +25,21 @@ export default async function PrincipalDashboardPage() {
     );
   }
 
-  const [distribution, byGrade, bySection, bias, pipeline, openRecs] = await Promise.all([
+  const [distribution, byGrade, bySection, bias, pipeline, openRecs, config] = await Promise.all([
     getSchoolRiskDistribution(sy.id),
     getRiskBreakdownByGrade(sy.id),
     getRiskBreakdownBySection(sy.id),
     getBiasBreakdowns(sy.id),
     getInterventionPipeline(sy.id),
     getOpenRecommendations(sy.id),
+    prisma.algorithmConfig.findFirst({
+      where: { isActive: true },
+      select: { biasThresholds: true },
+    }),
   ]);
+  const biasThresholds = (config?.biasThresholds as { highRateMultiplier?: number }) ?? {};
+  const highRateMultiplier =
+    typeof biasThresholds.highRateMultiplier === "number" ? biasThresholds.highRateMultiplier : 0.5;
 
   const summary = await generateSchoolSummary({
     schoolYearLabel: sy.label,
@@ -54,7 +62,7 @@ export default async function PrincipalDashboardPage() {
       <header>
         <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">School dashboard</h1>
         <p className="mt-1 text-sm text-slate-600">
-          {distribution.total} active enrollment{distribution.total === 1 ? "" : "s"} in {sy.label}. Drill down by grade, section, or demographic dimension. Disparity flags fire when a group&apos;s HIGH rate exceeds the school average by more than 50%.
+          {distribution.total} active enrollment{distribution.total === 1 ? "" : "s"} in {sy.label}. Drill down by grade, section, or demographic dimension. Disparity flags fire when a group&apos;s HIGH rate exceeds the school average by more than {(highRateMultiplier * 100).toFixed(0)}% (configurable in the admin algorithm panel).
         </p>
       </header>
 
@@ -98,16 +106,16 @@ export default async function PrincipalDashboardPage() {
             Bias monitoring
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Distribution by sex, SPED status, and learning modality. Disparity flags surface groups whose HIGH rate exceeds the school average by &gt;50%.
+            Distribution by sex, SPED status, and learning modality. Disparity flags surface groups whose HIGH rate exceeds the school average by &gt;{(highRateMultiplier * 100).toFixed(0)}%.
           </p>
         </header>
         <div className="mt-4 grid gap-4">
-          <RiskBreakdownTable title="By sex" rows={bias.bySex} highRateAlert={0.5} />
-          <RiskBreakdownTable title="By SPED status" rows={bias.bySpedStatus} highRateAlert={0.5} />
+          <RiskBreakdownTable title="By sex" rows={bias.bySex} highRateAlert={highRateMultiplier} />
+          <RiskBreakdownTable title="By SPED status" rows={bias.bySpedStatus} highRateAlert={highRateMultiplier} />
           <RiskBreakdownTable
             title="By learning modality"
             rows={bias.byLearningModality}
-            highRateAlert={0.5}
+            highRateAlert={highRateMultiplier}
           />
         </div>
       </section>

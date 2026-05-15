@@ -276,6 +276,18 @@ export type LatestRisk = {
   band: "LOW" | "MODERATE" | "HIGH";
   factors: import("@/lib/risk/types").RiskFactors;
   computedAt: string;
+  enrollmentId: string;
+  /** Active override (if any). The UI is responsible for visibly indicating
+   * that the displayed band has been overridden and showing the original. */
+  override: {
+    id: string;
+    originalScore: number;
+    originalBand: "LOW" | "MODERATE" | "HIGH";
+    overrideBand: "LOW" | "MODERATE" | "HIGH";
+    justification: string;
+    overriddenByName: string;
+    createdAt: string;
+  } | null;
 };
 
 export async function getLatestRiskForStudent(
@@ -287,17 +299,36 @@ export async function getLatestRiskForStudent(
     select: { id: true },
   });
   if (!enrollment) return null;
-  const latest = await prisma.riskAssessment.findFirst({
-    where: { enrollmentId: enrollment.id },
-    orderBy: { computedAt: "desc" },
-    select: { score: true, band: true, factors: true, computedAt: true },
-  });
+  const [latest, activeOverride] = await Promise.all([
+    prisma.riskAssessment.findFirst({
+      where: { enrollmentId: enrollment.id },
+      orderBy: { computedAt: "desc" },
+      select: { score: true, band: true, factors: true, computedAt: true },
+    }),
+    prisma.riskOverride.findFirst({
+      where: { enrollmentId: enrollment.id, clearedAt: null },
+      include: { overriddenBy: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
   if (!latest) return null;
   return {
     score: latest.score,
     band: latest.band as LatestRisk["band"],
     factors: latest.factors as unknown as LatestRisk["factors"],
     computedAt: latest.computedAt.toISOString(),
+    enrollmentId: enrollment.id,
+    override: activeOverride
+      ? {
+          id: activeOverride.id,
+          originalScore: activeOverride.originalScore,
+          originalBand: activeOverride.originalBand as LatestRisk["band"],
+          overrideBand: activeOverride.overrideBand as LatestRisk["band"],
+          justification: activeOverride.justification,
+          overriddenByName: activeOverride.overriddenBy.name,
+          createdAt: activeOverride.createdAt.toISOString(),
+        }
+      : null,
   };
 }
 

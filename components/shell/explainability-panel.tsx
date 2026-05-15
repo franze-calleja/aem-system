@@ -141,14 +141,33 @@ export default function ExplainabilityPanel({ score, band, factors, compact = fa
 }
 
 // Inline risk badge for tables and lists.
-export function RiskBadge({ band, score }: { band: RiskBandLabel | null; score: number | null }) {
+export function RiskBadge({
+  band,
+  score,
+  overridden,
+}: {
+  band: RiskBandLabel | null;
+  score: number | null;
+  /** When true, append a small "override" indicator + use the override band's style. */
+  overridden?: boolean;
+}) {
   if (band === null || score === null) {
     return <span className="rounded px-2 py-0.5 text-xs bg-slate-100 text-slate-400">Not scored</span>;
   }
   const style = BAND_STYLES[band];
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-semibold border ${style.bg} ${style.text} ${style.border}`}>
-      {band} · {score.toFixed(0)}
+    <span
+      title={overridden ? "Band reflects a principal override of the algorithmic score." : undefined}
+      className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold border ${style.bg} ${style.text} ${style.border}`}
+    >
+      <span>
+        {band} · {score.toFixed(0)}
+      </span>
+      {overridden && (
+        <span className="rounded-full border border-rose-300 bg-rose-100 px-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-rose-700">
+          OVR
+        </span>
+      )}
     </span>
   );
 }

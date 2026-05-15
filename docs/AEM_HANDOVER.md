@@ -1,9 +1,11 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-15 (Gemini key configured + recommendation narrative + principal school summary + intervention COMPLETE flow + outcome tracking view all shipped. AI Literacy Chat remains deferred.)
-**Next session starts at:** Phase 7 (governance polish + demo data) — most natural next step. Lands the principal Risk Override workflow, scheduled engine recompute, admin-tunable bias thresholds, "How does this work?" literacy pages, and historical-SY demo data (which also unblocks Phase 5.4 cohort analysis). The remaining AI Literacy Chat could also be picked up as a smaller alternative.
+**Last session ended:** 2026-05-15 (Phase 7 governance core shipped — `RiskOverride` workflow with full UI + admin-tunable bias-monitoring threshold + DB-level append-only `AuditLog` trigger)
+**Next session starts at:** Phase 7 demo + literacy (the remaining Phase 7 work): historical-SY demo data (3 years per spec — unblocks Phase 5.4 cohort analysis), "How does this work?" literacy pages, scheduled engine recompute, and the QA sweep walking the Maria scenario end-to-end. AI Literacy Chat remains deferred and can be the final demo-polish slot.
 
-**Gemini status**: `GEMINI_API_KEY` configured; `AICache` table now has RISK_NARRATIVE + RECOMMENDATION_NARRATIVE + SCHOOL_SUMMARY rows. Cache hits are ~30× faster than fresh calls. Without the key, every surface shows the "AI narrative disabled" fallback note instead of breaking.
+**Gemini status**: `GEMINI_API_KEY` configured; `AICache` table has RISK_NARRATIVE + RECOMMENDATION_NARRATIVE + SCHOOL_SUMMARY rows. Cache hits are ~30× faster than fresh calls. Without the key, every surface shows the "AI narrative disabled" fallback note instead of breaking.
+
+**Governance status**: `RISK_OVERRIDE` audit action is now actually emitted (was reserved since Phase 1). `AuditLog` is hard append-only at the DB layer — UPDATE/DELETE attempts via raw SQL are rejected. `AlgorithmConfig.biasThresholds.highRateMultiplier` drives the principal dashboard disparity flag and is editable from the admin algorithm form.
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

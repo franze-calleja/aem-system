@@ -212,6 +212,7 @@ model User {
   interventionsOwned    Intervention[]
   interventionNotes     InterventionNote[]
   interventionRevisions InterventionRevision[]
+  riskOverrides         RiskOverride[]
 
   @@index([role])
 }
@@ -336,6 +337,7 @@ model StudentEnrollment {
   attendance                 Attendance[]
   behavioralRecords          BehavioralRecord[]
   riskAssessments            RiskAssessment[]
+  riskOverrides              RiskOverride[]
   counselingNotes            CounselingNote[]
   interventionParticipations InterventionParticipation[]
 
@@ -443,15 +445,19 @@ model AuditLog {
 // Versioned configuration for the risk-scoring algorithm.
 // Exactly one row should have isActive=true; enforced at app layer.
 model AlgorithmConfig {
-  id            String   @id @default(cuid())
-  version       Int      @unique
-  weights       Json // { academic, attendance, behavioral, interventionHistory, profile }
-  thresholds    Json // { moderateMin, highMin }
-  ruleConfig    Json // per-pattern-rule toggles
-  isActive      Boolean  @default(false)
-  changedById   String? // plain string — FK to User not enforced in DB
-  changedAt     DateTime @default(now())
-  justification String?
+  id             String   @id @default(cuid())
+  version        Int      @unique
+  weights        Json // { academic, attendance, behavioral, interventionHistory, profile }
+  thresholds     Json // { moderateMin, highMin }
+  ruleConfig     Json // per-pattern-rule toggles
+  // Disparity flagging thresholds for the principal bias-monitoring panel.
+  // Shape: { highRateMultiplier: number } — a group's HIGH rate must exceed
+  // the school average by this multiplier to flag (e.g. 0.5 = +50%).
+  biasThresholds Json     @default("{\"highRateMultiplier\": 0.5}")
+  isActive       Boolean  @default(false)
+  changedById    String? // plain string — FK to User not enforced in DB
+  changedAt      DateTime @default(now())
+  justification  String?
 
   riskAssessments RiskAssessment[]
 
@@ -476,6 +482,28 @@ model RiskAssessment {
   @@index([enrollmentId, computedAt])
   @@index([schoolYearId, band])
   @@index([schoolYearId, computedAt])
+}
+
+// Principal override of a risk classification. Snapshots the original score
+// + band at the moment of override so the original assessment remains
+// reconstructable even after fresh recomputes. clearedAt = null is "active";
+// at most one active override per enrollment is enforced at the app layer.
+model RiskOverride {
+  id             String            @id @default(cuid())
+  enrollmentId   String
+  enrollment     StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  overriddenById String
+  overriddenBy   User              @relation(fields: [overriddenById], references: [id], onDelete: Restrict)
+  originalScore  Float
+  originalBand   RiskBand
+  overrideBand   RiskBand
+  justification  String
+  createdAt      DateTime          @default(now())
+  clearedAt      DateTime?
+  clearedById    String? // plain string — FK to User not enforced
+
+  @@index([enrollmentId, clearedAt])
+  @@index([overriddenById])
 }
 
 // Pattern match result from the multi-scope pattern detector.

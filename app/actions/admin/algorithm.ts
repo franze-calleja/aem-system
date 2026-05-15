@@ -23,6 +23,9 @@ const ConfigSchema = z.object({
   ruleConcentratedRisk: z.coerce.boolean().optional(),
   ruleSubjectStruggle: z.coerce.boolean().optional(),
   ruleAttendanceErosion: z.coerce.boolean().optional(),
+  // Bias monitoring disparity flag. Multiplier on the school-wide HIGH rate;
+  // a group exceeding (school rate × (1 + multiplier)) is flagged.
+  biasHighRateMultiplier: z.coerce.number().min(0).max(5),
 });
 
 export type SaveConfigResult = { ok: true; version: number } | { ok: false; error: string };
@@ -47,6 +50,7 @@ export async function saveAlgorithmConfigAction(formData: FormData): Promise<Sav
     ruleConcentratedRisk: formData.get("ruleConcentratedRisk") === "on",
     ruleSubjectStruggle: formData.get("ruleSubjectStruggle") === "on",
     ruleAttendanceErosion: formData.get("ruleAttendanceErosion") === "on",
+    biasHighRateMultiplier: formData.get("biasHighRateMultiplier"),
   };
 
   const parsed = ConfigSchema.safeParse(raw);
@@ -89,6 +93,8 @@ export async function saveAlgorithmConfigAction(formData: FormData): Promise<Sav
     ATTENDANCE_EROSION: d.ruleAttendanceErosion ?? false,
   };
 
+  const biasThresholds = { highRateMultiplier: d.biasHighRateMultiplier };
+
   // Transaction: deactivate all, create new active version.
   const [, newConfig] = await prisma.$transaction([
     prisma.algorithmConfig.updateMany({ where: { isActive: true }, data: { isActive: false } }),
@@ -98,6 +104,7 @@ export async function saveAlgorithmConfigAction(formData: FormData): Promise<Sav
         weights,
         thresholds,
         ruleConfig,
+        biasThresholds,
         isActive: true,
         changedById: session.user.id,
         changedAt: new Date(),

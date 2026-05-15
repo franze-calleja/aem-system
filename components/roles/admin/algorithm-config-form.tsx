@@ -24,6 +24,9 @@ export default function AlgorithmConfigForm({ current }: Props) {
   const weights = current.weights as Record<string, number>;
   const thresholds = current.thresholds as Record<string, number>;
   const ruleConfig = current.ruleConfig as Record<string, boolean>;
+  const biasThresholds = (current.biasThresholds as { highRateMultiplier?: number }) ?? {};
+  const biasMultiplier =
+    typeof biasThresholds.highRateMultiplier === "number" ? biasThresholds.highRateMultiplier : 0.5;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -123,6 +126,27 @@ export default function AlgorithmConfigForm({ current }: Props) {
             </label>
           ))}
         </div>
+      </div>
+
+      {/* Bias monitoring threshold */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <h2 className="text-base font-semibold text-slate-900 mb-1">Bias monitoring threshold</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          A demographic group is flagged on the principal dashboard when its HIGH-risk rate exceeds the school-wide HIGH rate by this multiplier. Default 0.5 = +50%.
+        </p>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-slate-700">High-rate multiplier</span>
+          <input
+            type="number"
+            name="biasHighRateMultiplier"
+            min={0}
+            max={5}
+            step={0.05}
+            defaultValue={biasMultiplier}
+            required
+            className="w-32 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </label>
       </div>
 
       {/* Justification */}

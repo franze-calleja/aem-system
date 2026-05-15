@@ -46,6 +46,9 @@ export type CaseloadRiskRow = {
   riskScore: number | null;
   riskBand: RiskBandLabel | null;
   computedAt: string | null;
+  /** True when there is an uncleared RiskOverride on this enrollment.
+   * `riskBand` already reflects the override band when set. */
+  overridden: boolean;
 };
 
 export async function getCaseloadWithRisk(
@@ -61,12 +64,19 @@ export async function getCaseloadWithRisk(
         take: 1,
         select: { score: true, band: true, computedAt: true },
       },
+      riskOverrides: {
+        where: { clearedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { overrideBand: true },
+      },
     },
     orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
   });
 
   return enrollments.map((e) => {
     const latest = e.riskAssessments[0] ?? null;
+    const ovr = e.riskOverrides[0] ?? null;
     return {
       enrollmentId: e.id,
       studentId: e.student.id,
@@ -76,8 +86,13 @@ export async function getCaseloadWithRisk(
       sectionName: e.section.name,
       gradeLevel: e.section.gradeLevel,
       riskScore: latest?.score ?? null,
-      riskBand: latest ? (latest.band as RiskBandLabel) : null,
+      riskBand: ovr
+        ? (ovr.overrideBand as RiskBandLabel)
+        : latest
+          ? (latest.band as RiskBandLabel)
+          : null,
       computedAt: latest?.computedAt.toISOString() ?? null,
+      overridden: ovr !== null,
     };
   });
 }
