@@ -15,13 +15,9 @@ export const PRINCIPAL_NAV: NavSection[] = [
   },
   {
     title: "School dashboard",
+    href: "/principal/dashboard",
     description:
-      "Review risk distribution across grade levels, sections, and learner groups with drill-down visibility.",
-  },
-  {
-    title: "Bias monitoring",
-    description:
-      "Track disparity flags across demographic dimensions and inspect whether calibration changes are warranted.",
+      "Review risk distribution across grade levels, sections, and learner groups with drill-down visibility. Includes bias monitoring and intervention pipeline counts.",
   },
   {
     title: "Approval queue",

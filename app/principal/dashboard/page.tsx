@@ -1,0 +1,167 @@
+import Link from "next/link";
+import { requireRole } from "@/lib/session";
+import { getActiveSchoolYear } from "@/lib/active-year";
+import {
+  getBiasBreakdowns,
+  getInterventionPipeline,
+  getRiskBreakdownByGrade,
+  getRiskBreakdownBySection,
+  getSchoolRiskDistribution,
+} from "@/lib/risk/queries";
+import RiskBreakdownTable from "@/components/principal/risk-breakdown-table";
+
+export default async function PrincipalDashboardPage() {
+  await requireRole("PRINCIPAL");
+  const sy = await getActiveSchoolYear();
+
+  if (!sy) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
+        No active school year. Ask the admin to activate one.
+      </div>
+    );
+  }
+
+  const [distribution, byGrade, bySection, bias, pipeline] = await Promise.all([
+    getSchoolRiskDistribution(sy.id),
+    getRiskBreakdownByGrade(sy.id),
+    getRiskBreakdownBySection(sy.id),
+    getBiasBreakdowns(sy.id),
+    getInterventionPipeline(sy.id),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">School dashboard</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          {distribution.total} active enrollment{distribution.total === 1 ? "" : "s"} in {sy.label}. Drill down by grade, section, or demographic dimension. Disparity flags fire when a group&apos;s HIGH rate exceeds the school average by more than 50%.
+        </p>
+      </header>
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="HIGH" value={distribution.high} total={distribution.total} tone="rose" />
+        <StatCard label="MODERATE" value={distribution.moderate} total={distribution.total} tone="amber" />
+        <StatCard label="LOW" value={distribution.low} total={distribution.total} tone="emerald" />
+        <StatCard label="Unscored" value={distribution.unscored} total={distribution.total} tone="slate" />
+      </section>
+
+      <RiskBreakdownTable
+        title="By grade level"
+        description="Risk distribution per grade in the active school year."
+        rows={byGrade}
+      />
+      <RiskBreakdownTable
+        title="By section"
+        description="Section concentrations — click through to section views to act."
+        rows={bySection}
+      />
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <header>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Bias monitoring
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Distribution by sex, SPED status, and learning modality. Disparity flags surface groups whose HIGH rate exceeds the school average by &gt;50%.
+          </p>
+        </header>
+        <div className="mt-4 grid gap-4">
+          <RiskBreakdownTable title="By sex" rows={bias.bySex} highRateAlert={0.5} />
+          <RiskBreakdownTable title="By SPED status" rows={bias.bySpedStatus} highRateAlert={0.5} />
+          <RiskBreakdownTable
+            title="By learning modality"
+            rows={bias.byLearningModality}
+            highRateAlert={0.5}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <header className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Intervention pipeline
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {pipeline.total} intervention{pipeline.total === 1 ? "" : "s"} on file for {sy.label}.
+            </p>
+          </div>
+          <Link
+            href="/principal/approvals"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
+          >
+            Approval queue ({pipeline.pendingApproval})
+          </Link>
+        </header>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <PipelineCard label="Draft" value={pipeline.draft} tone="slate" />
+          <PipelineCard label="Pending" value={pipeline.pendingApproval} tone="amber" />
+          <PipelineCard label="Active" value={pipeline.active} tone="emerald" />
+          <PipelineCard label="Completed" value={pipeline.completed} tone="sky" />
+          <PipelineCard label="Cancelled" value={pipeline.cancelled} tone="rose" />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Cohort comparison
+        </h2>
+        <p className="mt-2">
+          Cross-year cohort analysis requires at least two completed school years of data. Currently only <span className="font-medium text-slate-700">{sy.label}</span> is on file. Land this view after the import wizard receives historical CSVs.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  total,
+  tone,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone: "rose" | "amber" | "emerald" | "slate";
+}) {
+  const pct = total === 0 ? 0 : Math.round((value / total) * 100);
+  const styles: Record<typeof tone, string> = {
+    rose: "border-rose-200 bg-rose-50 text-rose-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-600",
+  };
+  return (
+    <article className={`rounded-2xl border p-4 ${styles[tone]}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{label}</p>
+      <p className="mt-2 text-2xl font-bold">{value}</p>
+      <p className="text-xs">{pct}% of enrolled</p>
+    </article>
+  );
+}
+
+function PipelineCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "slate" | "amber" | "emerald" | "sky" | "rose";
+}) {
+  const styles: Record<typeof tone, string> = {
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    sky: "border-sky-200 bg-sky-50 text-sky-700",
+    rose: "border-rose-200 bg-rose-50 text-rose-700",
+  };
+  return (
+    <article className={`rounded-xl border p-3 ${styles[tone]}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{label}</p>
+      <p className="mt-1 text-xl font-bold">{value}</p>
+    </article>
+  );
+}

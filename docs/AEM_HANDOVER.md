@@ -1,7 +1,7 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-15 (Phase 3 fully complete — 3.1 / 3.2 / 3.3 / 3.4 / 3.5 / 3.6 + revision-mode edit form + auto-significant detection + principal Interim Revision UI all shipped)
-**Next session starts at:** Phase 5 (Dashboards) — school-wide risk distribution, cohort/cross-year views, bias monitoring. Phase 4 risk data + Phase 3 intervention data are both flowing; the principal dashboard surface is the next high-leverage build. Phase 6 (AI Layer / Gemini) is the alternative if the user wants narrative explanations first.
+**Last session ended:** 2026-05-15 (Phase 3 fully complete; Phase 5 substantially complete — principal dashboard, counselor pattern inbox, teacher per-class risk card all shipped; cohort analysis deferred because only 1 SY is on file)
+**Next session starts at:** Phase 6 (AI Layer / Gemini) — risk narratives + recommendation drafting via Gemini + What-If simulator + Decision Audit Trail. Needs `GEMINI_API_KEY` in env and consent-aware gating per student. Phase 7 (governance polish + demo data) is the alternative — and landing demo historical SY data there would also unblock the deferred Phase 5.4 cohort analysis surface.
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

@@ -568,36 +568,47 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 
 ---
 
-## Phase 5 — Dashboards & Cross-Year Views *(Week 5)*
+## Phase 5 — Dashboards & Cross-Year Views *(Week 5)* — ✅ *(2026-05-15, partial: cohort analysis deferred until historical years are loaded)*
 
 **Goal:** Insights are visible at every level. Cohort comparison works across years.
 
-### 5.1 Teacher Dashboards
-- [ ] Class-Level Dashboard: risk distribution chart, attendance trend, performance trend
-- [ ] Pattern Alerts Panel (student + section scope, scoped to teacher's sections)
-- [ ] At-Risk Students Panel sorted by score
+### 5.1 Teacher Dashboards *(✅ 2026-05-15 — covered by existing surfaces + new card)*
+- [x] Class-level risk distribution + top-3 at-risk students card on [app/teacher/my-classes/[classId]/page.tsx](app/teacher/my-classes/[classId]/page.tsx) via [components/roles/teacher/section-risk-card.tsx](components/roles/teacher/section-risk-card.tsx)
+- [x] Pattern Alerts: teacher consumes student-scope patterns via the existing [/teacher/student-risk](app/teacher/student-risk/page.tsx) per-section table and the per-class detail page. (Dedicated alerts panel can be split out later if needed.)
+- [x] At-Risk Students panel sorted by score — already live on [/teacher/student-risk](app/teacher/student-risk/page.tsx)
+- [x] Attendance + performance trends — present on existing class detail tabs
 
-### 5.2 Counselor Dashboards
-- [ ] Caseload Dashboard wired to real risk data
-- [ ] Pattern Detection Inbox (all four scopes)
-- [ ] Outcome Tracking view
+### 5.2 Counselor Dashboards *(✅ 2026-05-15)*
+- [x] Caseload Dashboard wired to real risk data — landed in Phase 4 ([app/counselor/caseload/page.tsx](app/counselor/caseload/page.tsx))
+- [x] Pattern Detection Inbox across all four scopes — [app/counselor/patterns/page.tsx](app/counselor/patterns/page.tsx) + [lib/patterns/queries.ts](lib/patterns/queries.ts) + [components/counselor/pattern-disposition.tsx](components/counselor/pattern-disposition.tsx). Disposition (Resolve / Dismiss) writes back to `PatternMatch.status` and audits via [app/actions/counselor/patterns.ts](app/actions/counselor/patterns.ts).
+- [ ] Outcome Tracking view — **deferred**: no ParticipationOutcome rows exist yet (outcomes aren't recorded until interventions close). Will land once the COMPLETE flow ships.
 
-### 5.3 Principal Dashboards
-- [ ] School-Wide Dashboard with drill-down: school → grade → section → student
-- [ ] Risk distribution by grade level, section, sex, learning modality
+### 5.3 Principal Dashboards *(✅ 2026-05-15)*
+- [x] School-Wide Dashboard at [/principal/dashboard](app/principal/dashboard/page.tsx) with drill-down by grade, section, demographic
+- [x] Risk distribution by grade level, section, sex, SPED status, learning modality via [lib/risk/queries.ts](lib/risk/queries.ts) (`getRiskBreakdownByGrade`, `getRiskBreakdownBySection`, `getBiasBreakdowns`)
+- [x] Bias monitoring: disparity flag when a group's HIGH rate exceeds the school average by &gt;50%, surfaced inline in [components/principal/risk-breakdown-table.tsx](components/principal/risk-breakdown-table.tsx)
+- [x] Intervention pipeline counts (DRAFT / PENDING_APPROVAL / ACTIVE / COMPLETED / CANCELLED) via `getInterventionPipeline`; CTA links to the approval queue
+- [x] Principal nav wired in [components/roles/principal/principal-config.ts](components/roles/principal/principal-config.ts)
 
-### 5.4 Cohort Analysis
+### 5.4 Cohort Analysis — **deferred to Phase 7 (or after historical import)**
 - [ ] Select grade level + multiple school years
 - [ ] Side-by-side risk band distributions, intervention counts, outcome rates
 - [ ] Year-over-year drift indicators
 - [ ] CSV export
 
-### Phase 5 Definition of Done
-- [ ] Principal opens Cohort Analysis and compares Grade 9 across 3 SYs from seed data
-- [ ] Counselor's Pattern Inbox shows live matches across all scopes
-- [ ] Teacher's class dashboard reflects up-to-date risk distribution
+**Why deferred:** Only `SY 2025-2026` is on file. A meaningful cohort comparison surface requires at least one prior school year of completed risk + intervention data. The principal dashboard renders a placeholder pointing at this dependency. Lands either (a) after the import wizard ingests a second SY's CSVs, or (b) as part of Phase 7 demo-data scaffolding.
 
-**Phase 5 retrospective:** _(fill in when done)_
+### Phase 5 Definition of Done
+- [x] Counselor's Pattern Inbox shows live matches across all scopes — verified: engine produced 1 STUDENT match, surfaced on the inbox page
+- [x] Teacher's class dashboard reflects up-to-date risk distribution — verified: the new SectionRiskCard renders LOW/MODERATE/HIGH counts and top-3 at-risk students
+- [ ] Principal opens Cohort Analysis and compares Grade 9 across 3 SYs — **deferred (see 5.4)**
+
+**Phase 5 retrospective:**
+- **The principal nav had three stubs; this slice closed two.** "School dashboard" and "Approval queue" (Phase 3.4) are now real pages. "Bias monitoring" was folded *into* the school dashboard rather than getting its own route — simpler nav, same surface. "Governance review" remains as a Phase 7 stub.
+- **Engine isn't auto-triggered.** Risk scores and patterns only materialise when someone hits the admin "Run engine" button or the new `scripts/run-risk-engine.ts`. Phase 5 dashboards expose this clearly (the school dashboard says "all unscored" when there's no data); scheduling lands in Phase 7.
+- **Cohort analysis is gated on data, not code.** The schema supports cross-year comparison today. The block is purely that seed only contains one SY. Worth not pretending otherwise — the dashboard placeholder names the dependency.
+- **Bias monitoring threshold is hard-coded at +50%.** Fine for Phase 5; should become an admin-tunable knob in `AlgorithmConfig` once we know what disparity thresholds the school actually cares about.
+- **Pure server-component dashboards.** No client state except the disposition buttons. Server-rendering keeps `npx tsc --noEmit` boring and makes the dashboards cacheable later via Next 16's `cache` primitive when traffic warrants it.
 
 ---
 

@@ -210,3 +210,143 @@ export async function getSchoolRiskDistribution(
 
   return { low, moderate, high, unscored, total: enrollments.length };
 }
+
+// ─── Drill-down breakdowns (principal dashboard) ────────────────────────────
+
+export type BreakdownGroup = {
+  key: string;
+  label: string;
+  low: number;
+  moderate: number;
+  high: number;
+  unscored: number;
+  total: number;
+};
+
+type EnrollmentWithBand = {
+  band: string | null;
+  gradeLevel: string;
+  sectionId: string;
+  sectionName: string;
+  sex: string;
+  spedStatus: string;
+  learningModality: string;
+};
+
+async function loadEnrollmentsWithLatestBand(
+  schoolYearId: string,
+): Promise<EnrollmentWithBand[]> {
+  const rows = await prisma.studentEnrollment.findMany({
+    where: { schoolYearId, status: "ACTIVE" },
+    include: {
+      student: { select: { sex: true, spedStatus: true } },
+      section: { select: { id: true, name: true, gradeLevel: true } },
+      riskAssessments: {
+        orderBy: { computedAt: "desc" },
+        take: 1,
+        select: { band: true },
+      },
+    },
+  });
+  return rows.map((r) => ({
+    band: r.riskAssessments[0]?.band ?? null,
+    gradeLevel: r.gradeLevel,
+    sectionId: r.section.id,
+    sectionName: `${r.section.gradeLevel} · ${r.section.name}`,
+    sex: r.student.sex,
+    spedStatus: r.student.spedStatus,
+    learningModality: r.learningModality,
+  }));
+}
+
+function groupBreakdown<T extends { band: string | null }>(
+  items: T[],
+  keyOf: (item: T) => { key: string; label: string },
+): BreakdownGroup[] {
+  const map = new Map<string, BreakdownGroup>();
+  for (const item of items) {
+    const { key, label } = keyOf(item);
+    if (!map.has(key)) {
+      map.set(key, { key, label, low: 0, moderate: 0, high: 0, unscored: 0, total: 0 });
+    }
+    const g = map.get(key)!;
+    g.total++;
+    if (item.band === "LOW") g.low++;
+    else if (item.band === "MODERATE") g.moderate++;
+    else if (item.band === "HIGH") g.high++;
+    else g.unscored++;
+  }
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export async function getRiskBreakdownByGrade(schoolYearId: string): Promise<BreakdownGroup[]> {
+  const rows = await loadEnrollmentsWithLatestBand(schoolYearId);
+  return groupBreakdown(rows, (r) => ({ key: r.gradeLevel, label: r.gradeLevel }));
+}
+
+export async function getRiskBreakdownBySection(
+  schoolYearId: string,
+): Promise<BreakdownGroup[]> {
+  const rows = await loadEnrollmentsWithLatestBand(schoolYearId);
+  return groupBreakdown(rows, (r) => ({ key: r.sectionId, label: r.sectionName }));
+}
+
+export type BiasBreakdowns = {
+  bySex: BreakdownGroup[];
+  bySpedStatus: BreakdownGroup[];
+  byLearningModality: BreakdownGroup[];
+};
+
+export async function getBiasBreakdowns(schoolYearId: string): Promise<BiasBreakdowns> {
+  const rows = await loadEnrollmentsWithLatestBand(schoolYearId);
+  return {
+    bySex: groupBreakdown(rows, (r) => ({ key: r.sex, label: r.sex })),
+    bySpedStatus: groupBreakdown(rows, (r) => ({
+      key: r.spedStatus,
+      label: r.spedStatus.replace(/_/g, " "),
+    })),
+    byLearningModality: groupBreakdown(rows, (r) => ({
+      key: r.learningModality,
+      label: r.learningModality.replace(/_/g, " "),
+    })),
+  };
+}
+
+// ─── Intervention pipeline (counts by status) ───────────────────────────────
+
+export type InterventionPipeline = {
+  draft: number;
+  pendingApproval: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  total: number;
+};
+
+export async function getInterventionPipeline(
+  schoolYearId: string,
+): Promise<InterventionPipeline> {
+  const rows = await prisma.intervention.groupBy({
+    by: ["status"],
+    where: { schoolYearId },
+    _count: { _all: true },
+  });
+  const out: InterventionPipeline = {
+    draft: 0,
+    pendingApproval: 0,
+    active: 0,
+    completed: 0,
+    cancelled: 0,
+    total: 0,
+  };
+  for (const r of rows) {
+    const c = r._count._all;
+    out.total += c;
+    if (r.status === "DRAFT") out.draft = c;
+    else if (r.status === "PENDING_APPROVAL") out.pendingApproval = c;
+    else if (r.status === "ACTIVE") out.active = c;
+    else if (r.status === "COMPLETED") out.completed = c;
+    else if (r.status === "CANCELLED") out.cancelled = c;
+  }
+  return out;
+}

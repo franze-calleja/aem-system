@@ -8,7 +8,9 @@ import {
   getSectionGrades,
   getSectionBehavioralRecords,
 } from "@/lib/teacher/queries";
+import { getSectionRiskForTeacher } from "@/lib/risk/queries";
 import ClassDetail from "@/components/roles/teacher/class-detail";
+import SectionRiskCard from "@/components/roles/teacher/section-risk-card";
 
 export default async function ClassDetailPage({
   params,
@@ -31,12 +33,13 @@ export default async function ClassDetailPage({
   const fromIso = from.toISOString().slice(0, 10);
   const toIso = today.toISOString().slice(0, 10);
 
-  const [attendance, grades, behavioral] = await Promise.all([
+  const [attendance, grades, behavioral, sectionRisk] = await Promise.all([
     getSectionAttendance(detail.assignment.sectionId, sy.id, fromIso, toIso),
     detail.assignment.subject
       ? getSectionGrades(detail.assignment.sectionId, detail.assignment.subject.id, sy.id)
       : Promise.resolve([]),
     getSectionBehavioralRecords(detail.assignment.sectionId, sy.id),
+    getSectionRiskForTeacher(session.user.id, detail.assignment.sectionId, sy.id),
   ]);
 
   return (
@@ -47,6 +50,11 @@ export default async function ClassDetailPage({
       >
         ← Back to My Classes
       </Link>
+
+      <SectionRiskCard
+        rows={sectionRisk}
+        sectionLabel={`${detail.assignment.section.gradeLevel} · ${detail.assignment.section.name}`}
+      />
 
       <ClassDetail
         assignmentId={detail.assignment.id}

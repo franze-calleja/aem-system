@@ -20,6 +20,12 @@ export const COUNSELOR_NAV: NavSection[] = [
       "Review AI-generated recommendation drafts and build formal individual, section, grade-level, or school-wide intervention plans.",
   },
   {
+    title: "Pattern Inbox",
+    href: "/counselor/patterns",
+    description:
+      "Resolve or dismiss algorithmic pattern matches across individual, section, grade, and school scopes.",
+  },
+  {
     title: "Feedback Queue",
     href: "/counselor/feedback",
     description:
