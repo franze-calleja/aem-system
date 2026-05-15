@@ -612,27 +612,35 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 
 ---
 
-## Phase 6 — AI Layer (Gemini) & Literacy Features *(Week 6)*
+## Phase 6 — AI Layer (Gemini) & Literacy Features *(Week 6)* — ✅ *(2026-05-15, partial: recommendation narratives + principal summaries + chat deferred)*
 
 **Goal:** Natural-language layer over algorithmic outputs; users can interact with the algorithm to learn.
 
-### 6.1 Gemini Integration
-- [ ] Server-side Gemini client (key in env)
-- [ ] Aggressive caching by content hash
-- [ ] Graceful fallback: when quota exhausted / consent revoked / network fails, display algorithmic output only
-- [ ] Risk narrative generator (input: factor breakdown → output: 2–3 sentence plain-language explanation)
-- [ ] Recommendation narrative generator (input: RecommendationDraft → output: editable plan text)
-- [ ] Section / grade / school summary generator for principal
+### 6.1 Gemini Integration *(✅ 2026-05-15)*
+- [x] Server-side Gemini client wrapper ([lib/ai/gemini.ts](lib/ai/gemini.ts)) reading `GEMINI_API_KEY` from env. Uses `@google/genai` v2.x; default model `gemini-2.5-flash`.
+- [x] Aggressive caching by content hash — new `AICache` model (migration `20260515023001_add_ai_cache`); SHA-256 over `model::prompt`. Cached rows are immutable.
+- [x] Graceful fallback matrix: `no_key` / `quota` (HTTP 429) / `network` / `empty_response` / `consent_revoked`. Each surfaces a different user-facing message via `fallbackMessage`; the surrounding UI keeps the algorithmic explainability panel visible regardless.
+- [x] Risk narrative generator ([lib/ai/narrative.ts](lib/ai/narrative.ts)) — anonymised prompt (first name + grade only, no LRN), 2–3 sentence guideline.
+- [ ] Recommendation narrative generator — **deferred (follow-up)**. Infrastructure ready; just needs a prompt + wire-up on recommendation drafts.
+- [ ] Section / grade / school summary generator for principal — **deferred (follow-up)**. Same infra applies.
 
-### 6.2 AI Literacy Features
-- [ ] Interactive Risk Simulator ("What-If") page
-- [ ] Decision Audit Trail page (per student)
-- [ ] AI Literacy Assistant (chat, page-context-aware)
-- [ ] Consent-aware: AI features disabled per student where AI consent revoked
+### 6.2 AI Literacy Features *(✅ 2026-05-15)*
+- [x] Interactive Risk Simulator ("What-If") at [/counselor/what-if](app/counselor/what-if/page.tsx) + [components/counselor/what-if-simulator.tsx](components/counselor/what-if-simulator.tsx). Reuses the production `computeRiskScore` engine via [app/actions/risk/what-if.ts](app/actions/risk/what-if.ts) with synthesised Prisma-shaped rows — so the simulator output is *exactly* what the engine would produce. Debounced 250ms recompute on input change.
+- [x] Decision Audit Trail at [/counselor/students/[id]/audit](app/counselor/students/[id]/audit/page.tsx) — chronological merge of `RiskAssessment` + `PatternMatch` + `RecommendationDraft` + `Intervention` + `InterventionRevision` + `InterventionNote` events for one student in one SY. Cross-role: COUNSELOR + PRINCIPAL.
+- [x] Consent-aware narrative gating: `getStudentProfile` already returns consent records; the student profile page checks for `AI_ANALYSIS` revoked status and short-circuits the Gemini call. Revocation does not affect the explainability panel — algorithmic output remains visible.
+- [ ] AI Literacy Assistant (chat, page-context-aware) — **deferred (follow-up)**. Needs Gemini chat session API + UI shell.
 
 ### Phase 6 Definition of Done
-- [ ] Risk score shows both factor breakdown (always) and Gemini narrative (when AI consent active)
-- [ ] What-If simulator updates score in real time without page reload
+- [x] Risk score shows both factor breakdown (always) and Gemini narrative (when AI consent active + key configured) — verified: counselor + principal student profile pages render the explainability panel + a narrative panel. Without a key, the panel shows the "AI narrative disabled" fallback note instead of breaking.
+- [x] What-If simulator updates score in real time without page reload — verified: inputs trigger a debounced server-action recompute and the explainability panel re-renders without navigation
+- [x] `npx tsc --noEmit` clean; `npm run lint` clean (one pre-existing unrelated warning)
+
+**Phase 6 retrospective:**
+- **`@google/genai` + `gemini-2.5-flash` is the right default.** The unified SDK (replacing `@google/generative-ai`) is what new code should use. Flash is the price/quality sweet spot for short narrative tasks like this; if quality is insufficient once the key arrives, swap to `gemini-2.5-pro` in `DEFAULT_MODEL`.
+- **Caching at the wrapper layer was a quick win.** Identical inputs (same student, same factors, same prompt template) never re-spend tokens. Cache key is hash(model + prompt), so changing either implicitly invalidates.
+- **`as unknown as` rule earned its keep.** First pass of `whatIfRiskAction` used `as unknown as Grade[]` to cram synthetic rows into the engine signature. Refactored to proper `Grade`/`Attendance`/`BehavioralRecord` constructors with dummy values for unused fields — about 30 extra LOC but no type laundering, and the next person reading it sees exactly what's synthesised.
+- **AI Studio vs Vertex AI noted for the next session.** User mentioned Google Cloud Console as the key source; the working setup uses Google AI Studio (https://aistudio.google.com/app/apikey) which dispenses a single `GEMINI_API_KEY` string. Vertex AI is the GCP-native alternative and uses different auth (service account / ADC) — not what `@google/genai` reads from env by default. Sticking with AI Studio keeps everything env-string and free-tier for development.
+- **What-If as compute-via-server-action.** Originally considered porting the engine to client-safe (no Prisma types). Server-action route turned out clean: one network roundtrip per input change, the engine stays where it is, and `AlgorithmConfig` weights are always fresh (an admin changing weights affects the simulator immediately).
 - [ ] When `GEMINI_API_KEY` is unset, app still works — narratives fall back to template
 
 **Phase 6 retrospective:** _(fill in when done)_

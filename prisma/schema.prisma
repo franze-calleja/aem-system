@@ -628,3 +628,19 @@ model InterventionRevision {
 
   @@index([interventionId, createdAt])
 }
+
+// ─── Phase 6: AI generation cache ───────────────────────────────────────────
+// Cache Gemini responses keyed by a SHA-256 hash of the prompt + model so we
+// don't re-spend tokens on identical inputs. Rows are immutable; invalidation
+// = recompute the hash with a new prompt template or model version.
+model AICache {
+  id          String   @id @default(cuid())
+  contentHash String   @unique
+  kind        String // e.g. "RISK_NARRATIVE", "RECOMMENDATION_NARRATIVE"
+  prompt      String
+  response    String
+  model       String
+  createdAt   DateTime @default(now())
+
+  @@index([kind, createdAt])
+}

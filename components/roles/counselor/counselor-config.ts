@@ -26,6 +26,12 @@ export const COUNSELOR_NAV: NavSection[] = [
       "Resolve or dismiss algorithmic pattern matches across individual, section, grade, and school scopes.",
   },
   {
+    title: "What-If Simulator",
+    href: "/counselor/what-if",
+    description:
+      "Tweak hypothetical risk inputs and see how the algorithm reacts. No data saved — a literacy tool for understanding the engine.",
+  },
+  {
     title: "Feedback Queue",
     href: "/counselor/feedback",
     description:

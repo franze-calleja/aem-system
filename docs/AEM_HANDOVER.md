@@ -1,7 +1,9 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-15 (Phase 3 fully complete; Phase 5 substantially complete — principal dashboard, counselor pattern inbox, teacher per-class risk card all shipped; cohort analysis deferred because only 1 SY is on file)
-**Next session starts at:** Phase 6 (AI Layer / Gemini) — risk narratives + recommendation drafting via Gemini + What-If simulator + Decision Audit Trail. Needs `GEMINI_API_KEY` in env and consent-aware gating per student. Phase 7 (governance polish + demo data) is the alternative — and landing demo historical SY data there would also unblock the deferred Phase 5.4 cohort analysis surface.
+**Last session ended:** 2026-05-15 (Phase 6 partial — Gemini infrastructure + risk narrative + What-If simulator + Decision Audit Trail all shipped; recommendation narratives + principal summaries + AI literacy chat deferred)
+**Next session starts at:** Phase 7 (governance polish + demo data) **OR** Phase 6 follow-up (recommendation narrative + principal summaries + AI literacy chat).
+
+**Gemini key**: user will paste `GEMINI_API_KEY=...` into `.env` from Google AI Studio (https://aistudio.google.com/app/apikey, NOT GCP Console). With the key, every existing risk narrative call starts producing real text without code changes; cache hits store in `AICache`. Without the key, all surfaces show graceful "AI narrative disabled" fallback notes.
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

@@ -269,6 +269,38 @@ export async function getStudentProfile(
   };
 }
 
+// ─── Latest risk assessment for an enrollment ───────────────────────────────
+
+export type LatestRisk = {
+  score: number;
+  band: "LOW" | "MODERATE" | "HIGH";
+  factors: import("@/lib/risk/types").RiskFactors;
+  computedAt: string;
+};
+
+export async function getLatestRiskForStudent(
+  studentId: string,
+  schoolYearId: string,
+): Promise<LatestRisk | null> {
+  const enrollment = await prisma.studentEnrollment.findUnique({
+    where: { studentId_schoolYearId: { studentId, schoolYearId } },
+    select: { id: true },
+  });
+  if (!enrollment) return null;
+  const latest = await prisma.riskAssessment.findFirst({
+    where: { enrollmentId: enrollment.id },
+    orderBy: { computedAt: "desc" },
+    select: { score: true, band: true, factors: true, computedAt: true },
+  });
+  if (!latest) return null;
+  return {
+    score: latest.score,
+    band: latest.band as LatestRisk["band"],
+    factors: latest.factors as unknown as LatestRisk["factors"],
+    computedAt: latest.computedAt.toISOString(),
+  };
+}
+
 // ─── Counseling notes (counselor-only, audited) ─────────────────────────────
 
 export type CounselingNoteRow = {

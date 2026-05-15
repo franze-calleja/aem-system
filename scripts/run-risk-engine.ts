@@ -10,11 +10,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { computeRiskScore } from "../lib/risk/engine";
 import { detectStudentPatterns, detectSectionPatterns } from "../lib/patterns/detector";
 import { generateRecommendation } from "../lib/patterns/recommendations";
-import type {
-  PatternRuleConfig,
-  RiskThresholds,
-  RiskWeights,
-} from "../lib/risk/types";
+import type { PatternRuleConfig, PatternRuleId } from "../lib/patterns/rules";
+import type { RiskThresholds, RiskWeights } from "../lib/risk/types";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -85,7 +82,7 @@ async function main() {
         scope: created.scope,
         scopeTargetId: created.scopeTargetId,
         schoolYearId: sy.id,
-        ruleId: m.ruleId,
+        ruleId: m.ruleId as PatternRuleId,
         patternMatchId: created.id,
         evidence: m.evidence as Record<string, unknown>,
       });
