@@ -185,13 +185,29 @@ export async function getIntervention(
   });
   if (!row) return null;
 
-  // Sensitive-field policy (Phase 3.3 baseline; expanded in Phase 3.6):
-  //   COUNSELOR: visible only for interventions they own.
-  //   PRINCIPAL: visible (read-only).
-  //   TEACHER / ADMIN: never.
+  // Visibility predicate (Phase 3.6 — full matrix).
+  const canView = await canViewIntervention(
+    {
+      scope: row.scope,
+      scopeTargetId: row.scopeTargetId,
+      schoolYearId: row.schoolYearId,
+      ownerId: row.ownerId,
+    },
+    viewerRole,
+    viewerUserId,
+  );
+  if (!canView) return null;
+
+  // Sensitive-field policy:
+  //   COUNSELOR — visible only for interventions they own.
+  //   PRINCIPAL — visible (full oversight).
+  //   TEACHER / ADMIN — never.
   const canSeeSensitive =
     (viewerRole === "COUNSELOR" && row.ownerId === viewerUserId) ||
     viewerRole === "PRINCIPAL";
+
+  // ADMIN sees metadata only — strip participants list as well.
+  const showParticipants = viewerRole !== "ADMIN";
 
   const labelMap = await resolveScopeLabels(
     [{ scope: row.scope, scopeTargetId: row.scopeTargetId }],
@@ -223,13 +239,224 @@ export async function getIntervention(
             counselingContext: row.sensitive.counselingContext,
           }
         : null,
-    participants: row.participations.map((p) => ({
-      enrollmentId: p.enrollmentId,
-      studentName: `${p.enrollment.student.lastName}, ${p.enrollment.student.firstName}`,
-      lrn: p.enrollment.student.lrn,
-      outcome: p.outcome,
-    })),
+    participants: showParticipants
+      ? row.participations.map((p) => ({
+          enrollmentId: p.enrollmentId,
+          studentName: `${p.enrollment.student.lastName}, ${p.enrollment.student.firstName}`,
+          lrn: p.enrollment.student.lrn,
+          outcome: p.outcome,
+        }))
+      : [],
   };
+}
+
+// ─── Visibility predicate ───────────────────────────────────────────────────
+
+async function canViewIntervention(
+  intervention: {
+    scope: PatternScope;
+    scopeTargetId: string;
+    schoolYearId: string;
+    ownerId: string;
+  },
+  viewerRole: Role,
+  viewerUserId: string,
+): Promise<boolean> {
+  if (viewerRole === "COUNSELOR") return true;
+  if (viewerRole === "PRINCIPAL") return true;
+  if (viewerRole === "ADMIN") return true; // metadata-only, but allowed to read
+
+  // TEACHER: scoped by their assignments.
+  const assignments = await prisma.teacherAssignment.findMany({
+    where: { userId: viewerUserId, schoolYearId: intervention.schoolYearId },
+    select: { sectionId: true, section: { select: { gradeLevel: true } } },
+  });
+  if (assignments.length === 0) return false;
+
+  if (intervention.scope === "SCHOOL") return true;
+  if (intervention.scope === "SECTION") {
+    return assignments.some((a) => a.sectionId === intervention.scopeTargetId);
+  }
+  if (intervention.scope === "GRADE") {
+    return assignments.some((a) => a.section.gradeLevel === intervention.scopeTargetId);
+  }
+  if (intervention.scope === "STUDENT") {
+    const enrollment = await prisma.studentEnrollment.findFirst({
+      where: {
+        studentId: intervention.scopeTargetId,
+        schoolYearId: intervention.schoolYearId,
+      },
+      select: { sectionId: true },
+    });
+    if (!enrollment) return false;
+    return assignments.some((a) => a.sectionId === enrollment.sectionId);
+  }
+  return false;
+}
+
+// ─── Teacher view: active interventions touching their assignments ─────────
+
+export type TeacherInterventionRow = {
+  id: string;
+  scope: PatternScope;
+  scopeLabel: string;
+  type: InterventionType;
+  status: InterventionStatus;
+  startDate: string;
+  endDate: string | null;
+  schedule: string | null;
+  accommodations: string | null;
+  staffActions: string | null;
+  targetOutcomes: string | null;
+};
+
+export async function getInterventionsForTeacher(
+  teacherUserId: string,
+  schoolYearId: string,
+): Promise<TeacherInterventionRow[]> {
+  const assignments = await prisma.teacherAssignment.findMany({
+    where: { userId: teacherUserId, schoolYearId },
+    select: { sectionId: true, section: { select: { gradeLevel: true } } },
+  });
+  if (assignments.length === 0) return [];
+
+  const sectionIds = Array.from(new Set(assignments.map((a) => a.sectionId)));
+  const gradeLevels = Array.from(new Set(assignments.map((a) => a.section.gradeLevel)));
+
+  // Students in any of the teacher's sections — for STUDENT-scope visibility.
+  const studentEnrollments = await prisma.studentEnrollment.findMany({
+    where: { sectionId: { in: sectionIds }, schoolYearId },
+    select: { studentId: true },
+  });
+  const studentIds = studentEnrollments.map((e) => e.studentId);
+
+  const rows = await prisma.intervention.findMany({
+    where: {
+      schoolYearId,
+      status: { in: ["ACTIVE", "PENDING_APPROVAL"] },
+      OR: [
+        { scope: "SCHOOL" },
+        { scope: "SECTION", scopeTargetId: { in: sectionIds } },
+        { scope: "GRADE", scopeTargetId: { in: gradeLevels } },
+        ...(studentIds.length > 0
+          ? [{ scope: "STUDENT" as const, scopeTargetId: { in: studentIds } }]
+          : []),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const labelMap = await resolveScopeLabels(rows, schoolYearId);
+  return rows.map((r) => ({
+    id: r.id,
+    scope: r.scope,
+    scopeLabel: labelMap.get(`${r.scope}:${r.scopeTargetId}`) ?? r.scopeTargetId,
+    type: r.type,
+    status: r.status,
+    startDate: r.startDate.toISOString().slice(0, 10),
+    endDate: r.endDate?.toISOString().slice(0, 10) ?? null,
+    schedule: r.schedule,
+    accommodations: r.accommodations,
+    staffActions: r.staffActions,
+    targetOutcomes: r.targetOutcomes,
+  }));
+}
+
+// ─── Pending approvals (principal queue) ────────────────────────────────────
+
+export type PendingApprovalRow = {
+  id: string;
+  scope: PatternScope;
+  scopeTargetId: string;
+  scopeLabel: string;
+  type: InterventionType;
+  ownerName: string;
+  startDate: string;
+  endDate: string | null;
+  participantCount: number;
+  sensitive: { rationale: string; counselingContext: string | null } | null;
+};
+
+export async function getPendingApprovals(
+  schoolYearId: string,
+): Promise<PendingApprovalRow[]> {
+  const rows = await prisma.intervention.findMany({
+    where: { schoolYearId, status: "PENDING_APPROVAL" },
+    include: {
+      owner: { select: { name: true } },
+      sensitive: true,
+      _count: { select: { participations: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const labelMap = await resolveScopeLabels(rows, schoolYearId);
+  return rows.map((r) => ({
+    id: r.id,
+    scope: r.scope,
+    scopeTargetId: r.scopeTargetId,
+    scopeLabel: labelMap.get(`${r.scope}:${r.scopeTargetId}`) ?? r.scopeTargetId,
+    type: r.type,
+    ownerName: r.owner.name,
+    startDate: r.startDate.toISOString().slice(0, 10),
+    endDate: r.endDate?.toISOString().slice(0, 10) ?? null,
+    participantCount: r._count.participations,
+    sensitive: r.sensitive
+      ? {
+          rationale: r.sensitive.rationale,
+          counselingContext: r.sensitive.counselingContext,
+        }
+      : null,
+  }));
+}
+
+// ─── Counselor feedback queue ───────────────────────────────────────────────
+
+export type FeedbackQueueRow = {
+  id: string;
+  noteType: "OBSERVATION" | "REVISION_REQUEST" | "OUTCOME_OBSERVATION";
+  content: string;
+  authorName: string;
+  createdAt: string;
+  interventionId: string;
+  interventionScopeLabel: string;
+  interventionScope: PatternScope;
+  interventionType: InterventionType;
+};
+
+export async function getOpenFeedbackForCounselor(
+  counselorId: string,
+  schoolYearId: string,
+): Promise<FeedbackQueueRow[]> {
+  const rows = await prisma.interventionNote.findMany({
+    where: {
+      status: "OPEN",
+      intervention: { ownerId: counselorId, schoolYearId },
+    },
+    include: {
+      author: { select: { name: true } },
+      intervention: {
+        select: { id: true, scope: true, scopeTargetId: true, type: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const labelMap = await resolveScopeLabels(
+    rows.map((r) => ({ scope: r.intervention.scope, scopeTargetId: r.intervention.scopeTargetId })),
+    schoolYearId,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    noteType: r.noteType,
+    content: r.content,
+    authorName: r.author.name,
+    createdAt: r.createdAt.toISOString(),
+    interventionId: r.intervention.id,
+    interventionScopeLabel:
+      labelMap.get(`${r.intervention.scope}:${r.intervention.scopeTargetId}`) ??
+      r.intervention.scopeTargetId,
+    interventionScope: r.intervention.scope,
+    interventionType: r.intervention.type,
+  }));
 }
 
 // ─── Recommendation prefill ─────────────────────────────────────────────────

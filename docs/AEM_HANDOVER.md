@@ -1,7 +1,7 @@
 # AEM System — Session Handover
 
-**Last session ended:** 2026-05-14 (Phases 2.5 + 4 complete; Phase 3.1 schema + 3.2 counseling notes + 3.3 intervention builder shipped — builder is counselor-side only, approval center is next)
-**Next session starts at:** Phase 3.4 — Principal Approval Center (list PENDING_APPROVAL interventions; approve → status ACTIVE + audit INTERVENTION_APPROVED; reject → status CANCELLED + reason in InterventionRevision + audit INTERVENTION_REVISED)
+**Last session ended:** 2026-05-15 (Phase 3 substantially complete — 3.1 / 3.2 / 3.3 / 3.4 / 3.5 / 3.6 all shipped)
+**Next session starts at:** Phase 3 cleanup OR Phase 5 — pick one. Phase 3 deferrals: (1) revision-mode edit form for counselor Incorporate, (2) auto-detect significant change (scope/type/duration), (3) principal Interim Revision UI. Phase 5 (Dashboards) is unblocked: risk distribution + outcome tracking against active interventions is now feasible.
 
 This document is for the AI agent picking up the next session cold. **Read it first**, then read the files it points to.
 

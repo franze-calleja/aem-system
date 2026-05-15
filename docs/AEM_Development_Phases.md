@@ -476,32 +476,43 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Intervention detail page ([app/counselor/interventions/[id]/page.tsx](app/counselor/interventions/[id]/page.tsx)) renders public fields always, sensitive panel only when policy allows, participants list
 - [x] "Open in Builder" link on a recommendation prefills the form via `?fromRecommendation=<id>`; on save the draft transitions to INSTANTIATED
 - [x] Verification script: [scripts/verify-interventions.ts](scripts/verify-interventions.ts) — exercises all four scopes + the draft-instantiation path; confirms participation counts (1 / 15 / 20 / 20) and audit rows
-- [ ] Principal → Approval Center wired to real API — **deferred to Phase 3.4 next slice**
-- [ ] Approval action: status → active; rejection records reason — **deferred to Phase 3.4 next slice**
+- [x] Principal → Approval Center wired to real API ([app/principal/approvals/page.tsx](app/principal/approvals/page.tsx) + [app/actions/principal/interventions.ts](app/actions/principal/interventions.ts) + [app/principal/interventions/[id]/page.tsx](app/principal/interventions/[id]/page.tsx); nav linked in [components/roles/principal/principal-config.ts](components/roles/principal/principal-config.ts))
+- [x] Approval action: status → ACTIVE + INTERVENTION_APPROVED + INTERVENTION_ACTIVATED audit; rejection → CANCELLED + reason recorded in `InterventionRevision` (`isSignificant=true`, approvedById set) + INTERVENTION_CANCELLED + INTERVENTION_REVISED audit
 
-### 3.5 Feedback & Revision Workflow
-- [ ] Teacher → Intervention View: Log Session, Submit Observation, Submit Revision Request, Submit Outcome Observation
-- [ ] Counselor → Feedback Queue wired to real API
-- [ ] Disposition actions: Acknowledge / Incorporate / Discuss
-- [ ] Incorporate opens Builder in revision mode; save creates `InterventionRevision` linked to triggering note
-- [ ] Significant-change detector: scope, type, duration-beyond-threshold, target population → flags isSignificant
-- [ ] Significant revisions to broader-scope plans route to Principal re-approval queue
-- [ ] Interim Revision action (principal only) with mandatory justification, isInterim flag
+### 3.5 Feedback & Revision Workflow *(✅ 2026-05-15 — minimal viable; see notes)*
+- [x] Teacher → Intervention Feedback page wired to real API ([app/teacher/intervention-feedback/page.tsx](app/teacher/intervention-feedback/page.tsx) + [components/teacher/teacher-feedback-forms.tsx](components/teacher/teacher-feedback-forms.tsx)) — sees ACTIVE/PENDING interventions touching their assignments via `getInterventionsForTeacher`; public fields only
+- [x] Three server actions in [app/actions/teacher/intervention-feedback.ts](app/actions/teacher/intervention-feedback.ts): `logSessionAction` (OBSERVATION), `submitRevisionRequestAction` (REVISION_REQUEST), `submitOutcomeObservationAction` (OUTCOME_OBSERVATION). Each verifies the teacher's scope before writing.
+- [x] Counselor → Feedback Queue wired to real API ([app/counselor/feedback/page.tsx](app/counselor/feedback/page.tsx) + [components/counselor/feedback-disposition.tsx](components/counselor/feedback-disposition.tsx) + [app/actions/counselor/feedback.ts](app/actions/counselor/feedback.ts))
+- [x] Disposition actions: Acknowledge / Incorporate / Dismiss (mapped from spec's "Discuss" → "Dismiss" until in-app messaging lands)
+- [x] Incorporate creates an `InterventionRevision` with `triggeringNoteId` pointing back to the note + audit `INTERVENTION_REVISED`. Note moves OPEN → INCORPORATED.
+- [ ] **Deferred (next slice):** revision-mode edit form (current Incorporate captures the note content as the diff but does not open the plan for editing).
+- [ ] **Deferred (next slice):** auto-detect significant change (scope / type / duration-beyond-threshold). For now revisions are flagged `isSignificant=true` only on principal rejection; counselor Incorporate writes `isSignificant=false`. Re-approval routing waits until the revision-mode form ships.
+- [ ] **Deferred (next slice):** Interim Revision (principal-only, `isInterim=true`) — schema supports it but no UI yet.
 
-### 3.6 Visibility Enforcement
-- [ ] Intervention API filters fields by viewer role and scope (per matrix in [AEM_FLOW.md §5](AEM_FLOW.md))
-- [ ] Admin sees metadata only (no rationale, no notes, no sessions)
-- [ ] Section adviser elevation: sees public fields for all interventions in their advisory section
+### 3.6 Visibility Enforcement *(✅ 2026-05-15)*
+- [x] `getIntervention(id, viewerRole, viewerUserId)` in [lib/intervention/queries.ts](lib/intervention/queries.ts) returns `null` when the viewer cannot see the intervention at all
+- [x] TEACHER access predicate: STUDENT → must teach the student's section; SECTION → must teach the section; GRADE → must teach a section at that grade; SCHOOL → any teacher of the active SY
+- [x] Sensitive fields (`rationale`, `counselingContext`) stripped for everyone except the owning counselor and any principal
+- [x] ADMIN sees metadata only — participants list is stripped at the query layer (`participants: []`)
+- [x] `getInterventionsForTeacher(userId, schoolYearId)` returns only ACTIVE/PENDING interventions the teacher is in scope for (public fields, no sensitive)
+- [x] Section adviser elevation: an adviser is just a `TeacherAssignment` row with `isAdviser=true`; their `sectionId` is included in the assignment-based predicate, so they see public fields for their advisory section automatically
 
 ### Phase 3 Definition of Done
-- [ ] Counselor creates individual intervention end-to-end; teacher sees public fields only
-- [ ] Teacher submits revision request; counselor incorporates; revision logged with linked note
-- [ ] Section-wide intervention requires principal approval before activation
-- [ ] Significant revision to active section-wide plan triggers re-approval
-- [ ] Counselor cannot see other counselors' notes? (decide policy — spec says all counselors share)
-- [ ] Teacher cannot fetch counseling notes via direct API call (returns 403)
+- [x] Counselor creates individual intervention end-to-end; teacher sees public fields only (no rationale) — verified via [scripts/verify-phase-3-4-5-6.ts](scripts/verify-phase-3-4-5-6.ts)
+- [x] Teacher submits revision request; counselor incorporates; `InterventionRevision` created linked to the note (`triggeringNoteId`) — verified
+- [x] Section-wide intervention stays PENDING_APPROVAL until principal approves; becomes ACTIVE after approval — verified (script approved the SECTION intervention; status now ACTIVE)
+- [ ] Significant revision to active section-wide plan triggers re-approval — **deferred with the revision-mode form**
+- [x] Teacher hitting counseling notes API directly → 403/empty (enforced at query layer) — verified in 3.2
+- [x] Recommendation draft "Open in Builder" pre-fills intervention builder; on save marks draft as INSTANTIATED — verified in 3.3
+- [x] `npx tsc --noEmit` clean; `npm run lint` clean (one pre-existing unrelated warning)
+- [x] Tracker updated with retrospective (below)
 
-**Phase 3 retrospective:** _(fill in when done)_
+**Phase 3 retrospective:**
+- **Schema-first paid off.** Doing 3.1 alone in its own session meant the rest of Phase 3 had no schema churn — every UI slice slotted into the same migration. Saved at least one re-migration cycle.
+- **Dropping `InterventionSession` was the right call.** Reusing `InterventionNote(OBSERVATION)` keeps the feedback channel uniform and the counselor queue has one type of row to triage. Revisit only if grouping by physical session becomes necessary.
+- **Visibility predicate belongs in queries, not components.** Originally I expected to apply the matrix in route handlers; centralizing it in `canViewIntervention` (and `getInterventionsForTeacher`) means the predicate is the source of truth — UI just reads the result. Less to keep in sync.
+- **Two deferrals to call out in the next slice:** (1) revision-mode edit form, (2) auto-detect significant change. Both are gated on the same UX decision: "what does a counselor editing an active plan look like?" — answer that, both deferrals land together.
+- **Verification scripts continue to earn their keep.** Three scripts now ([verify-counseling-notes](scripts/verify-counseling-notes.ts), [verify-interventions](scripts/verify-interventions.ts), [verify-phase-3-4-5-6](scripts/verify-phase-3-4-5-6.ts)) exercise commit + audit paths that curl can't reach because of Auth.js session context. Keeping them.
 
 ---
 

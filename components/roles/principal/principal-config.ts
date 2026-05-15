@@ -25,6 +25,7 @@ export const PRINCIPAL_NAV: NavSection[] = [
   },
   {
     title: "Approval queue",
+    href: "/principal/approvals",
     description:
       "Approve broader-scope interventions, review significant revisions, and handle interim revisions when needed.",
   },
