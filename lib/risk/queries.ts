@@ -365,3 +365,152 @@ export async function getInterventionPipeline(
   }
   return out;
 }
+
+// ─── Cohort analysis (Phase 5.4) ────────────────────────────────────────────
+// Compare the same grade level across multiple school years. Returns one row
+// per SY with risk-band counts + intervention pipeline + completed-outcome
+// distribution, ordered by the SY's chronological start date (oldest first).
+
+export type CohortYearSlice = {
+  schoolYearId: string;
+  schoolYearLabel: string;
+  startDate: Date;
+  total: number;
+  low: number;
+  moderate: number;
+  high: number;
+  unscored: number;
+  // Touching this grade level only.
+  interventions: {
+    active: number;
+    completed: number;
+    pendingApproval: number;
+    cancelled: number;
+    draft: number;
+    total: number;
+  };
+  // From completed interventions where any participant in this grade level
+  // was tracked.
+  outcomes: {
+    improving: number;
+    stable: number;
+    declining: number;
+    completed: number;
+    unset: number;
+  };
+};
+
+export async function getCohortYearSlice(
+  schoolYearId: string,
+  gradeLevel: string,
+): Promise<CohortYearSlice | null> {
+  const sy = await prisma.schoolYear.findUnique({
+    where: { id: schoolYearId },
+    select: { id: true, label: true, startDate: true },
+  });
+  if (!sy) return null;
+
+  const enrollments = await prisma.studentEnrollment.findMany({
+    where: { schoolYearId, gradeLevel, status: "ACTIVE" },
+    include: {
+      riskAssessments: {
+        orderBy: { computedAt: "desc" },
+        take: 1,
+        select: { band: true },
+      },
+    },
+  });
+
+  let low = 0, moderate = 0, high = 0, unscored = 0;
+  for (const e of enrollments) {
+    const band = e.riskAssessments[0]?.band;
+    if (band === "LOW") low++;
+    else if (band === "MODERATE") moderate++;
+    else if (band === "HIGH") high++;
+    else unscored++;
+  }
+
+  // Interventions touching this grade in this SY: STUDENT-scope interventions
+  // for any enrolled student here, SECTION-scope for any section at this grade,
+  // GRADE-scope where scopeTargetId matches, SCHOOL-scope always counts.
+  const enrollmentIds = enrollments.map((e) => e.id);
+  const studentIds = await prisma.studentEnrollment.findMany({
+    where: { id: { in: enrollmentIds } },
+    select: { studentId: true },
+  }).then((rows) => rows.map((r) => r.studentId));
+  const sectionIds = await prisma.section.findMany({
+    where: { schoolYearId, gradeLevel },
+    select: { id: true },
+  }).then((rows) => rows.map((r) => r.id));
+
+  const interventionRows = await prisma.intervention.findMany({
+    where: {
+      schoolYearId,
+      OR: [
+        { scope: "STUDENT", scopeTargetId: { in: studentIds } },
+        { scope: "SECTION", scopeTargetId: { in: sectionIds } },
+        { scope: "GRADE", scopeTargetId: gradeLevel },
+        { scope: "SCHOOL" },
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      participations: {
+        where: { enrollmentId: { in: enrollmentIds } },
+        select: { outcome: true },
+      },
+    },
+  });
+
+  const interventions = {
+    active: 0,
+    completed: 0,
+    pendingApproval: 0,
+    cancelled: 0,
+    draft: 0,
+    total: interventionRows.length,
+  };
+  const outcomes = { improving: 0, stable: 0, declining: 0, completed: 0, unset: 0 };
+  for (const iv of interventionRows) {
+    if (iv.status === "ACTIVE") interventions.active++;
+    else if (iv.status === "COMPLETED") interventions.completed++;
+    else if (iv.status === "PENDING_APPROVAL") interventions.pendingApproval++;
+    else if (iv.status === "CANCELLED") interventions.cancelled++;
+    else if (iv.status === "DRAFT") interventions.draft++;
+    if (iv.status === "COMPLETED") {
+      for (const p of iv.participations) {
+        if (p.outcome === "IMPROVING") outcomes.improving++;
+        else if (p.outcome === "STABLE") outcomes.stable++;
+        else if (p.outcome === "DECLINING") outcomes.declining++;
+        else if (p.outcome === "COMPLETED") outcomes.completed++;
+        else outcomes.unset++;
+      }
+    }
+  }
+
+  return {
+    schoolYearId: sy.id,
+    schoolYearLabel: sy.label,
+    startDate: sy.startDate,
+    total: enrollments.length,
+    low,
+    moderate,
+    high,
+    unscored,
+    interventions,
+    outcomes,
+  };
+}
+
+export async function getCohortAnalysis(
+  schoolYearIds: string[],
+  gradeLevel: string,
+): Promise<CohortYearSlice[]> {
+  const slices = await Promise.all(
+    schoolYearIds.map((id) => getCohortYearSlice(id, gradeLevel)),
+  );
+  return slices
+    .filter((s): s is CohortYearSlice => s !== null)
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+}

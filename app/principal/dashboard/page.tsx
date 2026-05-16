@@ -146,13 +146,23 @@ export default async function PrincipalDashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Cohort comparison
-        </h2>
-        <p className="mt-2">
-          Cross-year cohort analysis requires at least two completed school years of data. Currently only <span className="font-medium text-slate-700">{sy.label}</span> is on file. Land this view after the import wizard receives historical CSVs.
-        </p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <header className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Cohort comparison
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Compare a grade level across school years — risk distribution, intervention pipeline, completed-intervention outcomes, year-over-year drift.
+            </p>
+          </div>
+          <Link
+            href="/principal/cohort-analysis"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
+          >
+            Open cohort analysis
+          </Link>
+        </header>
       </section>
     </div>
   );

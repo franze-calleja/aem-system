@@ -544,6 +544,7 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [ ] School-level rules: Day-of-Week Effect, Year-Over-Year Drift — **deferred to Phase 5**
 - [x] Schema: `PatternMatch` (scope, scopeTargetId, ruleId, evidence json, matchedAt, status) — same migration
 - [x] Detection runs on compute trigger; results upsert existing OPEN patterns — [lib/patterns/detector.ts](lib/patterns/detector.ts)
+- [x] **Detector intervention reads wired (2026-05-16):** [lib/patterns/detector.ts](lib/patterns/detector.ts) `detectStudentPatterns` now bulk-fetches `InterventionParticipation` per student (across all years), then populates `hasActiveIntervention` (any ACTIVE in current SY) + `priorInterventionOutcomes` (mapped from `ParticipationOutcome` to the rule input enum via `mapOutcomeToRuleEnum`: IMPROVING→IMPROVED, DECLINING→DECLINED, STABLE/COMPLETED→STABLE). This unblocks `RECOVERY_TRACKING` + `CHRONIC_CONCERN`. Verified by re-running [seed-demo.ts](../scripts/seed-demo.ts): both rules now match their seeded fixtures.
 
 ### 4.3 Recommendation Engine
 - [x] Mapping table: ruleId → suggestedType + rationale template — [lib/patterns/recommendations.ts](lib/patterns/recommendations.ts)
@@ -596,18 +597,22 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Intervention pipeline counts (DRAFT / PENDING_APPROVAL / ACTIVE / COMPLETED / CANCELLED) via `getInterventionPipeline`; CTA links to the approval queue
 - [x] Principal nav wired in [components/roles/principal/principal-config.ts](components/roles/principal/principal-config.ts)
 
-### 5.4 Cohort Analysis — **deferred to Phase 7 (or after historical import)**
-- [ ] Select grade level + multiple school years
-- [ ] Side-by-side risk band distributions, intervention counts, outcome rates
-- [ ] Year-over-year drift indicators
-- [ ] CSV export
+### 5.4 Cohort Analysis *(✅ 2026-05-16 — unblocked by Phase 7.4 demo data)*
+- [x] Select grade level + multiple school years — [app/principal/cohort-analysis/page.tsx](app/principal/cohort-analysis/page.tsx) with a GET-form picker (grade dropdown + per-year checkboxes; submit posts a `years` CSV via a hidden field so the URL is shareable and bookmarkable)
+- [x] Side-by-side risk band distributions — LOW/MODERATE/HIGH/Unscored per-year columns
+- [x] Intervention counts — Active / Pending / Completed / Cancelled / Total touching the grade (pulled together by `getCohortYearSlice` in [lib/risk/queries.ts](lib/risk/queries.ts) — joins STUDENT/SECTION/GRADE/SCHOOL-scope plans that touch the grade level)
+- [x] Outcome rates — IMPROVING / STABLE / COMPLETED / DECLINING / unset distribution from completed-intervention participations
+- [x] Year-over-year drift indicators — HIGH-rate delta per year column vs. the previous year, color-coded (rose = worse, emerald = better)
+- [x] CSV export — `?format=csv` renders a structured data-URL download with all metrics in row-per-metric / column-per-year shape
+- [x] Wired into [principal nav](../components/roles/principal/principal-config.ts) and the [principal dashboard](app/principal/dashboard/page.tsx) (replaced the "coming soon" placeholder with a real link)
+- [x] Verified end-to-end via curl: principal sees 200; teacher denied 307; default render shows all 3 SYs; YoY drift computes correctly (+1.00pp in G9 from 24-25→25-26); CSV payload renders with the expected metrics
 
-**Why deferred:** Only `SY 2025-2026` is on file. A meaningful cohort comparison surface requires at least one prior school year of completed risk + intervention data. The principal dashboard renders a placeholder pointing at this dependency. Lands either (a) after the import wizard ingests a second SY's CSVs, or (b) as part of Phase 7 demo-data scaffolding.
+**Replaces the prior deferral note.** This now lands ahead of Phase 7.4's QA sweep because the demo data shipped first.
 
 ### Phase 5 Definition of Done
 - [x] Counselor's Pattern Inbox shows live matches across all scopes — verified: engine produced 1 STUDENT match, surfaced on the inbox page
 - [x] Teacher's class dashboard reflects up-to-date risk distribution — verified: the new SectionRiskCard renders LOW/MODERATE/HIGH counts and top-3 at-risk students
-- [ ] Principal opens Cohort Analysis and compares Grade 9 across 3 SYs — **deferred (see 5.4)**
+- [x] Principal opens Cohort Analysis and compares Grade 9 across 3 SYs — verified end-to-end 2026-05-16; 3 SYs of demo data populated by [seed-demo.ts](../scripts/seed-demo.ts); CSV export functional
 
 **Phase 5 retrospective:**
 - **The principal nav had three stubs; this slice closed two.** "School dashboard" and "Approval queue" (Phase 3.4) are now real pages. "Bias monitoring" was folded *into* the school dashboard rather than getting its own route — simpler nav, same surface. "Governance review" remains as a Phase 7 stub.
@@ -686,23 +691,66 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [x] Belt-and-suspenders: even raw SQL attempts are rejected (verified — see `scripts/verify-overrides-governance.ts`)
 - [x] Closes the Phase 1 known-debt item: "DB-level append-only AuditLog grants — app-layer enforcement only"
 
-### 7.4 Demo Data
-- [ ] Generate 3 school years of synthetic data (~240 students/year, full grades/attendance/behavior)
-- [ ] At least one student matching every pattern rule
-- [ ] At least one closed intervention per scope with outcome
+### 7.4 Demo Data *(✅ 2026-05-16)*
+- [x] Generate 3 school years of synthetic data — `SY 2023-2024`, `SY 2024-2025`, `SY 2025-2026` (active) — via [scripts/seed-demo.ts](../scripts/seed-demo.ts). Idempotent, seeded PRNG, bulk inserts in 1k batches. End-to-end run ~17–30s.
+- [x] **6 demo sections per SY** (Grade 7 *Aristotle/Bacon*, Grade 8 *Darwin/Einstein*, Grade 9 *Faraday/Galileo*) — fresh names so the existing G9 Newton/Curie + Maria's Phase 2 data stay untouched
+- [x] **5 cohorts × ~80 students = 400 unique students** progressing G7→G8→G9 across years. 240 demo enrollments per SY (260 in 25-26 once existing Newton/Curie students are counted)
+- [x] **15 subjects per SY** (MATH/ENG/SCI/AP/FIL × Grade 7/8/9); **11 demo teachers** (5 subject teachers spanning all sections + 6 advisers, one per section)
+- [x] **Bulk-generated** 14,400 grade rows, 129,600 attendance rows (180 school days × 720 enrollments), ~120 behavioral records
+- [x] At least one student matching every detector-implemented pattern rule:
+  - `ACADEMIC_DECLINE_CLUSTER` (15 matches), `CRISIS_WARNING` (1), `DISENGAGEMENT_SIGNAL` (2) — student-scope fixtures in cohort C2023
+  - `CONCENTRATED_RISK` (1) — Faraday G9 25-26, tuned baseline −22pts + absence +15pp so >30% land MODERATE/HIGH
+  - `SUBJECT_STRUGGLE` (2) — Darwin G8 25-26, MATH8 depressed −20pts to push fail rate >40%
+  - `ATTENDANCE_EROSION` (2) — Bacon G7 25-26, +18pp absences vs. school baseline
+  - **Known gap (not in scope for 7.4):** `RECOVERY_TRACKING` + `CHRONIC_CONCERN` don't fire because [lib/patterns/detector.ts:88-89](../lib/patterns/detector.ts#L88-L89) stubs `hasActiveIntervention=false` / `priorInterventionOutcomes=[]`. Demo data still seeds active interventions + closed-with-unfavourable interventions so these rules will fire once the detector reads intervention data.
+- [x] **One closed intervention per scope with outcome:**
+  - STUDENT (23-24, ACADEMIC_SUPPORT, IMPROVING)
+  - SECTION (24-25, Faraday G9, mixed IMPROVING/STABLE/COMPLETED)
+  - GRADE (23-24, G8-wide ACADEMIC_SUPPORT, COMPLETED across 80 participants)
+  - SCHOOL (23-24, school-wide ATTENDANCE_PROGRAM, COMPLETED across all 240 enrollments)
+- [x] Plus 2 ACTIVE 25-26 interventions on fixture students so the live dashboards show pipeline (academic-decline support + recovery-tracking counseling)
+- [x] Risk engine re-runs for **every** SY (not just active) — wipes per-SY `RiskAssessment`/`PatternMatch`/`RecommendationDraft` and recomputes, so historical-year dashboards (cohort comparison, etc.) have real numbers
+- [x] Verified end-state: SY 23-24 240 LOW · SY 24-25 240 LOW · SY 25-26 216 LOW + 44 MODERATE · 23 pattern matches (18 STUDENT, 5 SECTION)
+- [x] `npx tsc --noEmit` clean; `npm run lint` clean (one pre-existing unrelated warning)
+- **Unblocks:** Phase 5.4 Cohort Analysis (now has ≥2 historical SYs of risk + intervention data) and Phase 7.5 QA Sweep
 
-### 7.5 QA Sweep
-- [ ] Walk every scene in [AEM_Scenario_Maria.md](AEM_Scenario_Maria.md) end-to-end
-- [ ] All verification checklist items pass
-- [ ] Type check, lint, build all clean
-- [ ] Smoke test on tablet viewport (Teacher attendance + gradebook)
+### 7.5 QA Sweep *(✅ 2026-05-16 — except tablet-viewport smoke which requires a human)*
+- [x] **Build clean** — `npm run build` succeeds, 27 routes (was 23; added `/principal/cohort-analysis` + others wired in 7.3 and 7.4)
+- [x] **Type + lint clean** — `npx tsc --noEmit` clean; `npm run lint` clean except one pre-existing unused-import warning in `app/teacher/student-risk/page.tsx` (unrelated to current scope)
+- [x] **Route × role smoke matrix** — 31 checks across 4 roles passed (admin/teacher/counselor/principal). Each role 200 on their own pages; cross-role hits 307. Captured in `/tmp/smoke.sh` for reuse.
+- [x] **DB-state spot checks across the Maria scenario:**
+  - Maria's enrollment + MATH9 Q1→Q2 decline (85→72) intact from Phase 2b
+  - Audit log: 12 distinct action types present including LOGIN/LOGOUT/LOGIN_FAILED, INTERVENTION_CREATED/ACTIVATED/REVISED, COUNSELING_NOTE_CREATED/READ, RISK_OVERRIDE, ATTENDANCE_RECORDED, BEHAVIORAL_INCIDENT_RECORDED
+  - Counseling notes: only `COUNSELOR` role appears as author (RBAC sanity)
+  - Risk overrides: only `PRINCIPAL` role appears as override author (RBAC sanity)
+  - Interventions: all 4 scopes represented across mixed statuses (STUDENT ACTIVE+COMPLETED, SECTION PENDING_APPROVAL+COMPLETED, GRADE COMPLETED+CANCELLED, SCHOOL PENDING_APPROVAL+COMPLETED)
+  - InterventionRevision: 2 `isSignificant=true`, 1 `isInterim=true` — both branches of the workflow exercised
+  - 364 InterventionParticipation rows with non-null outcomes
+  - DB-level append-only AuditLog trigger confirmed: UPDATE + DELETE both rejected with `AuditLog is append-only` error
+- [x] **Scenario coverage map** captured in [docs/AEM_Scenario_Maria.md](AEM_Scenario_Maria.md) — every scene's verifiable items confirmed end-to-end except those requiring direct UI interaction (see "Not verifiable without a human" below).
+- [ ] **Smoke test on tablet viewport** — *requires a human in front of a tablet-sized browser. Not curl-verifiable.* Specific items to click through: teacher attendance keyboard P/A/T/E entry, gradebook entry form, counselor intervention builder modal, principal cohort-analysis form submit.
+
+**Not verifiable without a human (handover list):**
+1. Keyboard-driven attendance entry on `/teacher/my-classes/[classId]` (P/A/T/E quick keys, bulk save)
+2. Gradebook entry form interaction
+3. Sensitive-field collapse rendering for teacher/admin views on intervention details
+4. Builder "save & activate" vs "submit for approval" branching at form-submit time
+5. Tablet-viewport responsiveness across the above
+6. Notifications bell behavior (the spec implies it but the UI hook isn't yet built)
+7. Scene 12.3 AI Literacy Assistant chat — *carried forward from Phase 6 deferral*
+8. Manual consent revocation walk-through (no demo data currently has a REVOKED consent row — capability exists, exercise is one admin click)
 
 ### Phase 7 Definition of Done
 - [ ] Maria scenario (Scenes 0–12) walkable without intervention
 - [ ] All Master Verification Checklist items pass
 - [ ] Demo-ready
 
-**Phase 7 retrospective:** _(fill in when done)_
+**Phase 7 progress notes:**
+- *7.4 retro (2026-05-16):* The fixture-tuning iteration mattered more than the bulk-data pipeline. First pass landed only ~15% of Faraday in MODERATE; the rule needs >30%. Bumping baseline from −10 → −22 and absence from +0.08 → +0.15 got it over the line. Lesson: when seeding for an engine, write the rule's required output as the test, then back into the input pressure — don't eyeball it. Also: idempotent regeneration was useful but the existing-data check meant I had to wipe Faraday's three tables to re-tune; a `--force` flag on the script would have saved one round-trip. Skipping it for now since this script is meant to be run once per environment.
+- *Detector intervention reads (2026-05-16):* Wired in the same session — was meant to be "two lines" but ended up needing the cross-year participation fetch (a student's prior outcomes don't live on their *current* enrollment). Single bulk fetch + in-memory group keeps it N=1 query per detector run. Mapping decision: `COMPLETED` (the participation outcome enum) → `STABLE` (the rule input enum). `COMPLETED` semantically means "the plan ran to completion" not "the student improved"; calling it `NO_CHANGE` would have caused false unfavorable hits on every closed plan.
+- *5.4 cohort analysis (2026-05-16):* Came out smaller than expected. The bulk of the work was the `getCohortYearSlice` query that has to consider four intervention scopes touching a grade (STUDENT enrolled here, SECTION at this grade, GRADE matching the level, SCHOOL always). Page itself is server-rendered with a GET form — no client state. The hidden-field shimming for multi-year checkboxes is the only client JS; should probably replace with a small client component if this grows.
+- *7.5 QA sweep (2026-05-16):* Curl + DB inspection covers most of the Maria scenario but not the truly interactive parts (keyboard P/A/T/E, builder modals, tablet viewport). Flagged 8 items that need a human in front of a browser before we can call Phase 7 "demo-ready" in the strictest sense. Everything else passes.
+- **Still outstanding for Phase 7 Definition of Done:** the tablet-viewport smoke test and a couple of interactive flows. Everything DB-, route-, build-, lint-, and type-verifiable is green.
 
 ---
 

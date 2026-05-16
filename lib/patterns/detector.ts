@@ -2,6 +2,7 @@
 // Returns PatternMatch records to persist (caller decides whether to upsert).
 
 import { prisma } from "@/lib/prisma";
+import type { ParticipationOutcome } from "@prisma/client";
 import type { PatternRuleConfig } from "./rules";
 import {
   ruleAcademicDeclineCluster,
@@ -20,6 +21,20 @@ export interface DetectedPattern {
   ruleId: string;
   evidence: Record<string, unknown>;
   schoolYearId: string;
+}
+
+// Maps the persisted ParticipationOutcome enum to the legacy rule input enum.
+// IMPROVING → IMPROVED (favorable); DECLINING → DECLINED (counted as
+// "unfavorable" by CHRONIC_CONCERN); STABLE and COMPLETED are treated as
+// neutral. Null outcomes (uncommon — only when a plan is marked COMPLETED
+// without per-participant outcomes set) default to STABLE so they don't
+// inflate the unfavorable count.
+function mapOutcomeToRuleEnum(
+  o: ParticipationOutcome | null,
+): "IMPROVED" | "STABLE" | "DECLINED" | "NO_CHANGE" {
+  if (o === "IMPROVING") return "IMPROVED";
+  if (o === "DECLINING") return "DECLINED";
+  return "STABLE";
 }
 
 // Run all student-level pattern rules for every active enrollment in a year.
@@ -41,6 +56,27 @@ export async function detectStudentPatterns(
       },
     },
   });
+
+  // Cross-year intervention history per student — needed for RECOVERY_TRACKING
+  // (hasActiveIntervention in the current SY) and CHRONIC_CONCERN
+  // (priorInterventionOutcomes across all years). Single bulk fetch, then
+  // group in memory to avoid N+1 queries inside the per-enrollment loop.
+  const studentIds = enrollments.map((e) => e.studentId);
+  const participations = await prisma.interventionParticipation.findMany({
+    where: { enrollment: { studentId: { in: studentIds } } },
+    select: {
+      outcome: true,
+      enrollment: { select: { studentId: true } },
+      intervention: { select: { status: true, schoolYearId: true } },
+    },
+  });
+  const partsByStudent = new Map<string, typeof participations>();
+  for (const p of participations) {
+    const sid = p.enrollment.studentId;
+    const arr = partsByStudent.get(sid);
+    if (arr) arr.push(p);
+    else partsByStudent.set(sid, [p]);
+  }
 
   const results: DetectedPattern[] = [];
 
@@ -75,6 +111,14 @@ export async function detectStudentPatterns(
 
     const currentBand = (e.riskAssessments[0]?.band ?? "LOW") as "LOW" | "MODERATE" | "HIGH";
 
+    const studentParts = partsByStudent.get(e.studentId) ?? [];
+    const hasActiveIntervention = studentParts.some(
+      (p) => p.intervention.status === "ACTIVE" && p.intervention.schoolYearId === schoolYearId,
+    );
+    const priorInterventionOutcomes = studentParts
+      .filter((p) => p.intervention.status === "COMPLETED")
+      .map((p) => mapOutcomeToRuleEnum(p.outcome));
+
     const input = {
       enrollmentId: e.id,
       studentId: e.studentId,
@@ -85,8 +129,8 @@ export async function detectStudentPatterns(
       consecutiveAbsences,
       behavioralSeverityWeightedCount: severityWeightedCount,
       riskBand: currentBand,
-      hasActiveIntervention: false, // Phase 3
-      priorInterventionOutcomes: [],  // Phase 3
+      hasActiveIntervention,
+      priorInterventionOutcomes,
     };
 
     const rules = [

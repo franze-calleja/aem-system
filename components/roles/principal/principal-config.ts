@@ -26,6 +26,12 @@ export const PRINCIPAL_NAV: NavSection[] = [
       "Approve broader-scope interventions, review significant revisions, and handle interim revisions when needed.",
   },
   {
+    title: "Cohort analysis",
+    href: "/principal/cohort-analysis",
+    description:
+      "Compare a grade level across school years — risk band distribution, intervention pipeline, completed-intervention outcomes, year-over-year drift. CSV export available.",
+  },
+  {
     title: "Governance review",
     description:
       "Inspect audit history, outcome trends, and risk overrides with mandatory written accountability.",
