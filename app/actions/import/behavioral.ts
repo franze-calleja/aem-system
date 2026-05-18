@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { parseCsv } from "@/lib/import/csv";
+import { checkCsvLimits } from "@/lib/import/limits";
 import { validateBehavioralCsv, type BehavioralRow } from "@/lib/import/behavioral";
 
 export type BehavioralPreview =
@@ -42,6 +43,9 @@ export async function previewBehavioralAction(formData: FormData): Promise<Behav
   });
   if (!parsed.success) return { ok: false, error: "Missing school year or CSV." };
 
+  const limitErr = checkCsvLimits(parsed.data.csv);
+  if (limitErr) return limitErr;
+
   const sy = await prisma.schoolYear.findUnique({ where: { id: parsed.data.schoolYearId } });
   if (!sy) return { ok: false, error: "School year not found." };
 
@@ -78,6 +82,9 @@ export async function commitBehavioralAction(formData: FormData): Promise<Behavi
     csv: formData.get("csv"),
   });
   if (!parsed.success) return { ok: false, error: "Missing school year or CSV." };
+
+  const limitErr = checkCsvLimits(parsed.data.csv);
+  if (limitErr) return limitErr;
 
   const sy = await prisma.schoolYear.findUnique({ where: { id: parsed.data.schoolYearId } });
   if (!sy) return { ok: false, error: "School year not found." };

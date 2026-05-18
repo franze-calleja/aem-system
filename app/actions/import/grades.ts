@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { parseCsv } from "@/lib/import/csv";
+import { checkCsvLimits } from "@/lib/import/limits";
 import { validateGradesCsv, type GradesRow } from "@/lib/import/grades";
 
 export type GradesPreview =
@@ -50,6 +51,9 @@ export async function previewGradesAction(formData: FormData): Promise<GradesPre
   });
   if (!parsed.success) return { ok: false, error: "Missing school year or CSV." };
 
+  const limitErr = checkCsvLimits(parsed.data.csv);
+  if (limitErr) return limitErr;
+
   const sy = await prisma.schoolYear.findUnique({ where: { id: parsed.data.schoolYearId } });
   if (!sy) return { ok: false, error: "School year not found." };
 
@@ -86,6 +90,9 @@ export async function commitGradesAction(formData: FormData): Promise<GradesComm
     csv: formData.get("csv"),
   });
   if (!parsed.success) return { ok: false, error: "Missing school year or CSV." };
+
+  const limitErr = checkCsvLimits(parsed.data.csv);
+  if (limitErr) return limitErr;
 
   const sy = await prisma.schoolYear.findUnique({ where: { id: parsed.data.schoolYearId } });
   if (!sy) return { ok: false, error: "School year not found." };

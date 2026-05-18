@@ -51,9 +51,110 @@ export type CaseloadRiskRow = {
   overridden: boolean;
 };
 
+// Page-aware caseload load. Returns the rows for the requested page (ordered
+// by student name) + the total count so the caller can render pagination.
+// Note: sorting by risk score is *not* done at this layer because score lives
+// in a related table; the per-page rows can be re-sorted by score in the UI
+// for the visible window (cheap). For a global "show me the highest-risk
+// student across all 2k" workflow, point counselors at the Pattern Inbox or
+// add a dedicated raw-SQL query later.
+export async function getCaseloadWithRiskPaged(
+  schoolYearId: string,
+  opts: { skip: number; take: number },
+): Promise<{ rows: CaseloadRiskRow[]; total: number }> {
+  const where = { schoolYearId, status: "ACTIVE" as const };
+  const [total, enrollments] = await Promise.all([
+    prisma.studentEnrollment.count({ where }),
+    prisma.studentEnrollment.findMany({
+      where,
+      include: {
+        student: { select: { id: true, lrn: true, firstName: true, lastName: true } },
+        section: { select: { name: true, gradeLevel: true } },
+        riskAssessments: {
+          orderBy: { computedAt: "desc" },
+          take: 1,
+          select: { score: true, band: true, computedAt: true },
+        },
+        riskOverrides: {
+          where: { clearedAt: null },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { overrideBand: true },
+        },
+      },
+      orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
+      skip: opts.skip,
+      take: opts.take,
+    }),
+  ]);
+
+  const rows: CaseloadRiskRow[] = enrollments.map((e) => {
+    const latest = e.riskAssessments[0] ?? null;
+    const ovr = e.riskOverrides[0] ?? null;
+    return {
+      enrollmentId: e.id,
+      studentId: e.student.id,
+      lrn: e.student.lrn,
+      firstName: e.student.firstName,
+      lastName: e.student.lastName,
+      sectionName: e.section.name,
+      gradeLevel: e.section.gradeLevel,
+      riskScore: latest?.score ?? null,
+      riskBand: ovr
+        ? (ovr.overrideBand as RiskBandLabel)
+        : latest
+          ? (latest.band as RiskBandLabel)
+          : null,
+      computedAt: latest?.computedAt.toISOString() ?? null,
+      overridden: ovr !== null,
+    };
+  });
+
+  return { rows, total };
+}
+
+// Aggregate band counts across the entire caseload — independent of pagination
+// so the header summary still reflects the full population, not just the page.
+export async function getCaseloadBandSummary(schoolYearId: string): Promise<{
+  scored: number;
+  high: number;
+  moderate: number;
+  total: number;
+}> {
+  const enrollments = await prisma.studentEnrollment.findMany({
+    where: { schoolYearId, status: "ACTIVE" },
+    select: {
+      id: true,
+      riskAssessments: {
+        orderBy: { computedAt: "desc" },
+        take: 1,
+        select: { band: true },
+      },
+      riskOverrides: {
+        where: { clearedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { overrideBand: true },
+      },
+    },
+  });
+  let scored = 0, high = 0, moderate = 0;
+  for (const e of enrollments) {
+    const ovr = e.riskOverrides[0]?.overrideBand;
+    const band = ovr ?? e.riskAssessments[0]?.band ?? null;
+    if (band === null) continue;
+    scored++;
+    if (band === "HIGH") high++;
+    else if (band === "MODERATE") moderate++;
+  }
+  return { scored, high, moderate, total: enrollments.length };
+}
+
 export async function getCaseloadWithRisk(
   schoolYearId: string,
 ): Promise<CaseloadRiskRow[]> {
+  // Kept for the cohort/risk callers that still want the full list. Prefer
+  // `getCaseloadWithRiskPaged` for any UI surface.
   const enrollments = await prisma.studentEnrollment.findMany({
     where: { schoolYearId, status: "ACTIVE" },
     include: {

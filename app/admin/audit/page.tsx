@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { AuditAction, Prisma } from "@prisma/client";
-
-const PAGE_SIZE = 50;
+import { paginate, parsePageParam } from "@/lib/pagination";
 
 const AUDIT_ACTIONS: AuditAction[] = [
   "LOGIN",
@@ -43,7 +42,7 @@ export default async function AdminAuditPage({
   const userId = typeof sp.userId === "string" ? sp.userId : undefined;
   const from = parseDate(typeof sp.from === "string" ? sp.from : undefined);
   const to = parseDate(typeof sp.to === "string" ? sp.to : undefined);
-  const page = Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
+  const requestedPage = parsePageParam(sp.page);
   const detailId = typeof sp.detail === "string" ? sp.detail : undefined;
 
   const where: Prisma.AuditLogWhereInput = {};
@@ -60,13 +59,18 @@ export default async function AdminAuditPage({
     }
   }
 
-  const [total, rows, users, resourceTypes] = await Promise.all([
-    prisma.auditLog.count({ where }),
+  const totalCount = await prisma.auditLog.count({ where });
+  const pagination = paginate(totalCount, requestedPage);
+  const page = pagination.page;
+  const totalPages = pagination.totalPages;
+  const total = pagination.total;
+
+  const [rows, users, resourceTypes] = await Promise.all([
     prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: pagination.skip,
+      take: pagination.take,
       include: { user: { select: { id: true, name: true, email: true, role: true } } },
     }),
     prisma.user.findMany({
@@ -78,7 +82,6 @@ export default async function AdminAuditPage({
       .then((r) => r.map((x) => x.resourceType).filter((x): x is string => !!x).sort()),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const detailRow = detailId ? rows.find((r) => r.id === detailId) : null;
 
   const buildHref = (overrides: Record<string, string | undefined>) => {

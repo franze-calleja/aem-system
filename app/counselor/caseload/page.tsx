@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getCaseloadWithRisk } from "@/lib/risk/queries";
+import { getCaseloadBandSummary, getCaseloadWithRiskPaged } from "@/lib/risk/queries";
 import { RiskBadge } from "@/components/shell/explainability-panel";
+import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shell/pagination-bar";
 
-export default async function CaseloadPage() {
+export default async function CaseloadPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireRole("COUNSELOR");
   const sy = await getActiveSchoolYear();
   if (!sy) {
@@ -13,9 +19,17 @@ export default async function CaseloadPage() {
     );
   }
 
-  const rows = await getCaseloadWithRisk(sy.id);
+  const sp = await searchParams;
+  const requestedPage = parsePageParam(sp.page);
+  const summary = await getCaseloadBandSummary(sy.id);
+  const pagination = paginate(summary.total, requestedPage, PAGE_SIZE);
+  const { rows } = await getCaseloadWithRiskPaged(sy.id, {
+    skip: pagination.skip,
+    take: pagination.take,
+  });
 
-  // Sort by risk score descending (unscored last).
+  // Within the visible page, surface higher-risk rows first. Full-population
+  // ranking lives in the Pattern Inbox.
   const sorted = [...rows].sort((a, b) => {
     if (a.riskScore === null && b.riskScore === null) return 0;
     if (a.riskScore === null) return 1;
@@ -23,22 +37,18 @@ export default async function CaseloadPage() {
     return b.riskScore - a.riskScore;
   });
 
-  const scored = rows.filter((r) => r.riskScore !== null).length;
-  const highCount = rows.filter((r) => r.riskBand === "HIGH").length;
-  const moderateCount = rows.filter((r) => r.riskBand === "MODERATE").length;
-
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Caseload Dashboard</h1>
         <p className="mt-1 text-sm text-slate-600">
-          {rows.length} student{rows.length === 1 ? "" : "s"} enrolled in {sy.label}.{" "}
-          {scored === 0
+          {summary.total} student{summary.total === 1 ? "" : "s"} enrolled in {sy.label}.{" "}
+          {summary.scored === 0
             ? "No risk scores computed yet — ask the admin to run the engine."
-            : `${scored} scored · ${highCount} HIGH · ${moderateCount} MODERATE.`}
+            : `${summary.scored} scored · ${summary.high} HIGH · ${summary.moderate} MODERATE.`}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Click a student to open the full academic + attendance + behavioral profile.
+          Click a student to open the full academic + attendance + behavioral profile. For a global view of the highest-risk students across the whole caseload, open the Pattern Inbox.
         </p>
       </header>
 
@@ -57,7 +67,7 @@ export default async function CaseloadPage() {
             <tbody>
               {sorted.map((r, i) => (
                 <tr key={r.studentId} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2 text-slate-400">{i + 1}</td>
+                  <td className="px-3 py-2 text-slate-400">{pagination.skip + i + 1}</td>
                   <td className="px-3 py-2">
                     <Link
                       href={`/counselor/students/${r.studentId}`}
@@ -76,8 +86,18 @@ export default async function CaseloadPage() {
                   </td>
                 </tr>
               ))}
+              {sorted.length === 0 && (
+                <tr>
+                  <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={5}>
+                    No students on this page.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-slate-100 px-3 py-3">
+          <PaginationBar pagination={pagination} basePath="/counselor/caseload" forwardParams={{}} />
         </div>
       </div>
     </div>

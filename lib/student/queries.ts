@@ -34,7 +34,10 @@ export type CaseloadRow = {
   behavioralIncidentCount: number;
 };
 
-export async function getCaseload(schoolYearId: string): Promise<CaseloadRow[]> {
+export async function getCaseload(
+  schoolYearId: string,
+  opts?: { skip?: number; take?: number },
+): Promise<CaseloadRow[]> {
   const enrollments = await prisma.studentEnrollment.findMany({
     where: { schoolYearId, status: "ACTIVE" },
     include: {
@@ -49,6 +52,8 @@ export async function getCaseload(schoolYearId: string): Promise<CaseloadRow[]> 
       behavioralRecords: { select: { id: true } },
     },
     orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
+    skip: opts?.skip,
+    take: opts?.take,
   });
 
   return enrollments.map((e) => {
@@ -71,6 +76,12 @@ export async function getCaseload(schoolYearId: string): Promise<CaseloadRow[]> 
       tardyRate: total === 0 ? 0 : tardy / total,
       behavioralIncidentCount: e.behavioralRecords.length,
     };
+  });
+}
+
+export async function getCaseloadCount(schoolYearId: string): Promise<number> {
+  return prisma.studentEnrollment.count({
+    where: { schoolYearId, status: "ACTIVE" },
   });
 }
 

@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getInterventionsForYear, getOutcomeTracking } from "@/lib/intervention/queries";
+import {
+  getInterventionsForYear,
+  getInterventionsCountForYear,
+  getOutcomeTracking,
+} from "@/lib/intervention/queries";
 import { getOpenRecommendations } from "@/lib/risk/queries";
 import { prisma } from "@/lib/prisma";
 import { generateRecommendationNarrative, fallbackMessage } from "@/lib/ai/narrative";
+import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shell/pagination-bar";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "border-slate-200 bg-slate-50 text-slate-600",
@@ -21,7 +27,11 @@ const SCOPE_LABEL: Record<string, string> = {
   SCHOOL: "School-wide",
 };
 
-export default async function CounselorInterventionsPage() {
+export default async function CounselorInterventionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireRole("COUNSELOR");
   const sy = await getActiveSchoolYear();
   if (!sy) {
@@ -32,8 +42,13 @@ export default async function CounselorInterventionsPage() {
     );
   }
 
+  const sp = await searchParams;
+  const requestedPage = parsePageParam(sp.page);
+  const totalInterventions = await getInterventionsCountForYear(sy.id);
+  const pagination = paginate(totalInterventions, requestedPage, PAGE_SIZE);
+
   const [interventions, recommendations, outcomes] = await Promise.all([
-    getInterventionsForYear(sy.id),
+    getInterventionsForYear(sy.id, { skip: pagination.skip, take: pagination.take }),
     getOpenRecommendations(sy.id),
     getOutcomeTracking(sy.id),
   ]);
@@ -86,7 +101,7 @@ export default async function CounselorInterventionsPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Intervention Builder</h1>
           <p className="mt-1 text-sm text-slate-600">
-            {interventions.length} intervention{interventions.length === 1 ? "" : "s"} in {sy.label}. Individual scope activates on save; section, grade, and school-wide scopes go to the principal for approval.
+            {totalInterventions.toLocaleString()} intervention{totalInterventions === 1 ? "" : "s"} in {sy.label}. Individual scope activates on save; section, grade, and school-wide scopes go to the principal for approval.
           </p>
         </div>
         <Link
@@ -263,6 +278,13 @@ export default async function CounselorInterventionsPage() {
                 ))}
               </tbody>
             </table>
+            <div className="mt-3">
+              <PaginationBar
+                pagination={pagination}
+                basePath="/counselor/interventions"
+                forwardParams={{}}
+              />
+            </div>
           </div>
         )}
       </section>

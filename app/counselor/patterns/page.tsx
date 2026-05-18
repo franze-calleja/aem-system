@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getPatternMatchesForYear } from "@/lib/patterns/queries";
+import {
+  getPatternMatchesCountForYear,
+  getPatternMatchesForYear,
+} from "@/lib/patterns/queries";
 import PatternDisposition from "@/components/counselor/pattern-disposition";
+import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shell/pagination-bar";
 
 const SCOPE_LABEL: Record<string, string> = {
   STUDENT: "Individual",
@@ -18,7 +23,11 @@ const SCOPE_TONE: Record<string, string> = {
   SCHOOL: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
-export default async function CounselorPatternInboxPage() {
+export default async function CounselorPatternInboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireRole("COUNSELOR");
   const sy = await getActiveSchoolYear();
   if (!sy) {
@@ -29,7 +38,14 @@ export default async function CounselorPatternInboxPage() {
     );
   }
 
-  const matches = await getPatternMatchesForYear(sy.id, "OPEN");
+  const sp = await searchParams;
+  const requestedPage = parsePageParam(sp.page);
+  const total = await getPatternMatchesCountForYear(sy.id, "OPEN");
+  const pagination = paginate(total, requestedPage, PAGE_SIZE);
+  const matches = await getPatternMatchesForYear(sy.id, "OPEN", {
+    skip: pagination.skip,
+    take: pagination.take,
+  });
 
   const grouped: Record<string, typeof matches> = {};
   for (const m of matches) {
@@ -42,11 +58,11 @@ export default async function CounselorPatternInboxPage() {
       <header>
         <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Pattern Inbox</h1>
         <p className="mt-1 text-sm text-slate-600">
-          {matches.length} open pattern match{matches.length === 1 ? "" : "es"} across all scopes in {sy.label}. Resolve once you&apos;ve acted on a pattern; dismiss to clear without action. Both leave an audit trail.
+          {total} open pattern match{total === 1 ? "" : "es"} across all scopes in {sy.label}. Resolve once you&apos;ve acted on a pattern; dismiss to clear without action. Both leave an audit trail.
         </p>
       </header>
 
-      {matches.length === 0 ? (
+      {total === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-400">
           Nothing open. Run the risk engine if you expect new matches.
         </div>
@@ -108,6 +124,11 @@ export default async function CounselorPatternInboxPage() {
               </section>
             );
           })}
+          <PaginationBar
+            pagination={pagination}
+            basePath="/counselor/patterns"
+            forwardParams={{}}
+          />
         </div>
       )}
     </div>

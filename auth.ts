@@ -2,9 +2,16 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { rateLimit, rateLimitReset, getClientIp } from "@/lib/rate-limit";
 import type { Role } from "@prisma/client";
+
+// Login throttle: 5 failed attempts per 15 minutes per IP. Successful logins
+// clear the bucket — a legitimate user who mistypes a few times isn't locked
+// out once they get in. Slow brute-force still hits the cap.
+const LOGIN_RATE_LIMIT = { limit: 5, windowSec: 15 * 60 };
 
 declare module "next-auth" {
   interface Session {
@@ -40,11 +47,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(raw) {
+        // Throttle by client IP before doing any DB work so brute-force
+        // attempts can't burn bcrypt cycles. The rate limiter is in-memory
+        // (single-process) — swap to a Redis-backed implementation if/when
+        // we go multi-instance.
+        const requestHeaders = await headers();
+        const ip = getClientIp(requestHeaders);
+        const gate = rateLimit(`login:${ip}`, LOGIN_RATE_LIMIT);
+        if (!gate.ok) {
+          await logAudit({
+            action: "LOGIN_FAILED",
+            metadata: {
+              reason: "rate_limited",
+              retryAfterSec: gate.retryAfterSec,
+              ip,
+            },
+          });
+          return null;
+        }
+
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) {
           await logAudit({
             action: "LOGIN_FAILED",
-            metadata: { reason: "invalid_input" },
+            metadata: { reason: "invalid_input", ip },
           });
           return null;
         }
@@ -59,7 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           await logAudit({
             action: "LOGIN_FAILED",
             userId: user?.id,
-            metadata: { email: normalized, reason: user ? "suspended" : "unknown_user" },
+            metadata: { email: normalized, reason: user ? "suspended" : "unknown_user", ip },
           });
           return null;
         }
@@ -69,10 +95,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           await logAudit({
             action: "LOGIN_FAILED",
             userId: user.id,
-            metadata: { email: normalized, reason: "bad_password" },
+            metadata: { email: normalized, reason: "bad_password", ip },
           });
           return null;
         }
+
+        // Successful login — clear the throttle for this IP so repeated
+        // legitimate sessions don't trip the limit later.
+        rateLimitReset(`login:${ip}`);
 
         return {
           id: user.id,

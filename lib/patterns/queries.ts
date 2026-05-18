@@ -20,11 +20,14 @@ export type PatternMatchRow = {
 export async function getPatternMatchesForYear(
   schoolYearId: string,
   status: PatternStatus | "ALL" = "OPEN",
+  opts?: { skip?: number; take?: number },
 ): Promise<PatternMatchRow[]> {
   const rows = await prisma.patternMatch.findMany({
     where: { schoolYearId, ...(status === "ALL" ? {} : { status }) },
     include: { _count: { select: { recommendations: true } } },
     orderBy: { matchedAt: "desc" },
+    skip: opts?.skip,
+    take: opts?.take,
   });
 
   const labelMap = await resolveScopeLabels(rows, schoolYearId);
@@ -40,6 +43,15 @@ export async function getPatternMatchesForYear(
     evidence: r.evidence as Record<string, unknown>,
     recommendationCount: r._count.recommendations,
   }));
+}
+
+export async function getPatternMatchesCountForYear(
+  schoolYearId: string,
+  status: PatternStatus | "ALL" = "OPEN",
+): Promise<number> {
+  return prisma.patternMatch.count({
+    where: { schoolYearId, ...(status === "ALL" ? {} : { status }) },
+  });
 }
 
 async function resolveScopeLabels(

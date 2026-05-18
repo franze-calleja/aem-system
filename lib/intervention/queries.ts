@@ -28,11 +28,14 @@ export type InterventionListRow = {
 
 export async function getInterventionsForYear(
   schoolYearId: string,
+  opts?: { skip?: number; take?: number },
 ): Promise<InterventionListRow[]> {
   const rows = await prisma.intervention.findMany({
     where: { schoolYearId },
     include: { owner: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
+    skip: opts?.skip,
+    take: opts?.take,
   });
 
   const labelMap = await resolveScopeLabels(rows, schoolYearId);
@@ -50,6 +53,10 @@ export async function getInterventionsForYear(
     createdAt: r.createdAt.toISOString(),
     triggeringRecommendationId: r.triggeringRecommendationId,
   }));
+}
+
+export async function getInterventionsCountForYear(schoolYearId: string): Promise<number> {
+  return prisma.intervention.count({ where: { schoolYearId } });
 }
 
 async function resolveScopeLabels(

@@ -745,6 +745,44 @@ Ready for Phase 3 (Intervention Module) or Phase 4 (Algorithmic Engine), dependi
 - [ ] All Master Verification Checklist items pass
 - [ ] Demo-ready
 
+### 7.7 Security hardening *(✅ 2026-05-18)*
+Production-readiness pass on three gaps surfaced during the QA review: brute-force protection on login, oversized-CSV protection on import, server-side pagination on long list pages.
+
+**Login rate limit** — [lib/rate-limit.ts](../lib/rate-limit.ts), wired in [auth.ts](../auth.ts).
+- Sliding-window in-memory limiter, keyed by client IP (read from `x-forwarded-for` → `x-real-ip` → `unknown`)
+- **5 failed attempts per 15 minutes per IP.** Successful login clears the bucket so a user who fat-fingers a few times isn't locked out once they get in.
+- Gate runs *before* the DB lookup + bcrypt compare, so an attacker can't burn server cycles
+- Every rate-limited attempt audited as `LOGIN_FAILED` with `reason=rate_limited` + `retryAfterSec` in metadata
+- **Single-process only.** For multi-instance prod, swap for a Redis-backed limiter (Upstash `@upstash/ratelimit` is the usual choice). Noted in the file's header comment.
+- Verified end-to-end: 7 bad attempts → attempts 6/7 audited as `rate_limited` (retryAfterSec: 900)
+
+**CSV import caps** — [lib/import/limits.ts](../lib/import/limits.ts), applied to all 4 admin import server actions (roster, grades, attendance, behavioral) on both preview *and* commit paths.
+- **5 MB** / **10,000 rows** cap. Comfortably handles the spec's expected volumes (240 students × 4 quarters × 5 subjects = ~4,800 grade rows; monthly attendance chunks).
+- Friendly error message names both the limit and the observed size; admin can split the file and re-upload
+- Verified with synthetic 6 MB and 11k-row payloads — both rejected; small CSVs pass through.
+
+**Pagination** — [lib/pagination.ts](../lib/pagination.ts) + [components/shell/pagination-bar.tsx](../components/shell/pagination-bar.tsx).
+- Uniform **PAGE_SIZE = 15** across all paginated surfaces (was 50 on audit; everything else was unbounded)
+- Applied to 6 list pages:
+  - `/admin/audit` — refactored to share the helper (lost the local `PAGE_SIZE = 50`)
+  - `/admin/users` — also lifted the role filter from client `useState` to URL state so server-side pagination respects the filter
+  - `/counselor/caseload` — added `getCaseloadWithRiskPaged` + `getCaseloadBandSummary` (full-population band counts stay accurate while the table itself paginates)
+  - `/principal/students` — uses existing `getCaseload` with new `{skip, take}` options + a `getCaseloadCount` helper
+  - `/counselor/interventions` — paginates the interventions table only; recommendations + outcomes stay unpaged (smaller N)
+  - `/counselor/patterns` — paginated the underlying query; in-page grouping by scope still works on each page
+- `PaginationBar` component renders prev/next links that preserve all other query params (filters, role, etc.)
+- Verified: 6 paginated routes return 200 on page 1, page 2, and out-of-range (page 99 clamps); Page 1 vs. Page 2 surface different rows.
+
+**Known follow-ups (intentionally deferred):**
+- Multi-instance Redis-backed rate limiter (one-line swap when we leave single-process)
+- The 12 unbounded `findMany` in [lib/intervention/queries.ts](../lib/intervention/queries.ts) — most are tightly filtered and used by detail pages (not lists), so the user-facing risk is small; revisit if any of them turn into general list endpoints
+- Application-level error/observability logging (currently only audit-log of user actions). Pino + a stderr sink would suffice locally; Sentry/Datadog for prod
+- `cache()` wrappers around expensive read queries (Next 16 supports it; not bottlenecked yet)
+
+**Verified:** `npx tsc --noEmit` clean; `npm run lint` clean (the one pre-existing unused-import warning still stands); `npm run build` clean; full role × route smoke matrix passes; rate-limit + CSV cap + pagination all exercised live.
+
+---
+
 **Phase 7 progress notes:**
 - *7.4 retro (2026-05-16):* The fixture-tuning iteration mattered more than the bulk-data pipeline. First pass landed only ~15% of Faraday in MODERATE; the rule needs >30%. Bumping baseline from −10 → −22 and absence from +0.08 → +0.15 got it over the line. Lesson: when seeding for an engine, write the rule's required output as the test, then back into the input pressure — don't eyeball it. Also: idempotent regeneration was useful but the existing-data check meant I had to wipe Faraday's three tables to re-tune; a `--force` flag on the script would have saved one round-trip. Skipping it for now since this script is meant to be run once per environment.
 - *Detector intervention reads (2026-05-16):* Wired in the same session — was meant to be "two lines" but ended up needing the cross-year participation fetch (a student's prior outcomes don't live on their *current* enrollment). Single bulk fetch + in-memory group keeps it N=1 query per detector run. Mapping decision: `COMPLETED` (the participation outcome enum) → `STABLE` (the rule input enum). `COMPLETED` semantically means "the plan ran to completion" not "the student improved"; calling it `NO_CHANGE` would have caused false unfavorable hits on every closed plan.

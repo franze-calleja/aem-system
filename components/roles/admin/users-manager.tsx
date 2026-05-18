@@ -9,6 +9,8 @@ import {
   resetPasswordAction,
 } from "@/app/actions/admin/users";
 import type { Role, UserStatus } from "@prisma/client";
+import type { Pagination } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shell/pagination-bar";
 
 type UserRow = {
   id: string;
@@ -20,6 +22,8 @@ type UserRow = {
   assignmentCount: number;
 };
 
+type RoleFilter = "ALL" | Role;
+
 const ROLE_LABELS: Record<Role, string> = {
   ADMIN: "Admin",
   TEACHER: "Teacher",
@@ -27,9 +31,17 @@ const ROLE_LABELS: Record<Role, string> = {
   PRINCIPAL: "Principal",
 };
 
-export default function UsersManager({ users }: { users: UserRow[] }) {
-  const [filter, setFilter] = useState<"ALL" | Role>("ALL");
-  const filtered = filter === "ALL" ? users : users.filter((u) => u.role === filter);
+export default function UsersManager({
+  users,
+  currentRole,
+  pagination,
+}: {
+  users: UserRow[];
+  currentRole: RoleFilter;
+  pagination: Pagination;
+}) {
+  const filterHref = (role: RoleFilter) =>
+    role === "ALL" ? "/admin/users" : `/admin/users?role=${role}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -47,22 +59,25 @@ export default function UsersManager({ users }: { users: UserRow[] }) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Accounts</h2>
-            <p className="mt-1 text-sm text-slate-600">{filtered.length} of {users.length}</p>
+            <p className="mt-1 text-sm text-slate-600">
+              {pagination.total.toLocaleString()} matching
+              {currentRole !== "ALL" ? ` ${ROLE_LABELS[currentRole]}` : ""}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {(["ALL", "ADMIN", "TEACHER", "COUNSELOR", "PRINCIPAL"] as const).map((r) => (
-              <button
+              <Link
                 key={r}
-                type="button"
-                onClick={() => setFilter(r)}
+                href={filterHref(r)}
+                prefetch={false}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  filter === r
+                  currentRole === r
                     ? "border-indigo-500 bg-indigo-50 text-indigo-900"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 {r === "ALL" ? "All" : ROLE_LABELS[r]}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
@@ -80,7 +95,7 @@ export default function UsersManager({ users }: { users: UserRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
+              {users.map((u) => (
                 <tr key={u.id} className="border-t border-slate-100">
                   <td className="px-3 py-3 font-medium text-slate-900">{u.name}</td>
                   <td className="px-3 py-3 text-slate-600">{u.email}</td>
@@ -102,7 +117,7 @@ export default function UsersManager({ users }: { users: UserRow[] }) {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {users.length === 0 && (
                 <tr>
                   <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={6}>
                     No users match this filter.
@@ -111,6 +126,14 @@ export default function UsersManager({ users }: { users: UserRow[] }) {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4">
+          <PaginationBar
+            pagination={pagination}
+            basePath="/admin/users"
+            forwardParams={{ role: currentRole === "ALL" ? undefined : currentRole }}
+          />
         </div>
       </section>
     </div>

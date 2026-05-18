@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getCaseload } from "@/lib/student/queries";
+import { getCaseload, getCaseloadCount } from "@/lib/student/queries";
+import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shell/pagination-bar";
 
-export default async function PrincipalStudentsPage() {
+export default async function PrincipalStudentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireRole("PRINCIPAL");
   const sy = await getActiveSchoolYear();
   if (!sy) {
@@ -14,15 +20,18 @@ export default async function PrincipalStudentsPage() {
     );
   }
 
-  const rows = await getCaseload(sy.id);
+  const sp = await searchParams;
+  const requestedPage = parsePageParam(sp.page);
+  const total = await getCaseloadCount(sy.id);
+  const pagination = paginate(total, requestedPage, PAGE_SIZE);
+  const rows = await getCaseload(sy.id, { skip: pagination.skip, take: pagination.take });
 
   return (
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Students — {sy.label}</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Read-only oversight view of all {rows.length} enrolled students. Click a row to open the full profile.
-          Bias monitoring and school-wide pattern analytics arrive in later phases.
+          Read-only oversight view of all {total.toLocaleString()} enrolled students. Click a row to open the full profile.
         </p>
       </header>
 
@@ -43,7 +52,7 @@ export default async function PrincipalStudentsPage() {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.studentId} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2 text-slate-400">{i + 1}</td>
+                  <td className="px-3 py-2 text-slate-400">{pagination.skip + i + 1}</td>
                   <td className="px-3 py-2">
                     <Link
                       href={`/principal/students/${r.studentId}`}
@@ -62,8 +71,18 @@ export default async function PrincipalStudentsPage() {
                   <td className="px-3 py-2 text-slate-600">{r.spedStatus === "NONE" ? "—" : r.spedStatus}</td>
                 </tr>
               ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={7}>
+                    No students on this page.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-slate-100 px-3 py-3">
+          <PaginationBar pagination={pagination} basePath="/principal/students" forwardParams={{}} />
         </div>
       </div>
     </div>
