@@ -80,20 +80,27 @@ export default async function CounselorInterventionsPage({
   for (const s of students) labelMap.set(`STUDENT:${s.id}`, `${s.lastName}, ${s.firstName}`);
   for (const sec of sections) labelMap.set(`SECTION:${sec.id}`, `${sec.gradeLevel} · ${sec.name}`);
 
-  const recommendationNarratives = await Promise.all(
-    recommendations.map((r) =>
-      generateRecommendationNarrative({
-        scope: r.scope as "STUDENT" | "SECTION" | "GRADE" | "SCHOOL",
-        scopeLabel:
-          labelMap.get(`${r.scope}:${r.scopeTargetId}`) ??
-          (r.scope === "GRADE" ? r.scopeTargetId : r.scope === "SCHOOL" ? "School-wide" : r.scopeTargetId),
-        suggestedType: r.suggestedType,
-        rationale: r.rationale,
-        evidence: r.evidence,
-        triggeringRuleId: r.triggeringRuleId,
-      }),
-    ),
-  );
+  // Sequential, not Promise.all — cache hits return instantly so re-visits are
+  // fast, but a cold cache (e.g., right after the engine ran and created N new
+  // recommendations) used to fire N parallel Gemini calls. On the free-tier
+  // key that's 15 RPM, so any cold N>15 batched call bursts past the rate
+  // limit and a chunk of the recommendations come back as `quota` fallbacks.
+  // Serialising keeps us under the per-minute cap; first cold visit is slower
+  // but every call lands a cached row that subsequent visits read instantly.
+  const recommendationNarratives: Awaited<ReturnType<typeof generateRecommendationNarrative>>[] = [];
+  for (const r of recommendations) {
+    const result = await generateRecommendationNarrative({
+      scope: r.scope as "STUDENT" | "SECTION" | "GRADE" | "SCHOOL",
+      scopeLabel:
+        labelMap.get(`${r.scope}:${r.scopeTargetId}`) ??
+        (r.scope === "GRADE" ? r.scopeTargetId : r.scope === "SCHOOL" ? "School-wide" : r.scopeTargetId),
+      suggestedType: r.suggestedType,
+      rationale: r.rationale,
+      evidence: r.evidence,
+      triggeringRuleId: r.triggeringRuleId,
+    });
+    recommendationNarratives.push(result);
+  }
 
   return (
     <div className="flex flex-col gap-6">

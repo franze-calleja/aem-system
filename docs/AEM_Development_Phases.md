@@ -806,6 +806,8 @@ Documented + extended the existing on-demand narrative generation with explicit 
 
 **Why not eager-on-engine-run.** Considered auto-pre-warming all 740 narratives whenever the admin runs the risk engine. Rejected: most narratives are never read, the cost is unpredictable, and the engine-run latency would balloon. The hybrid model (lazy default + manual buttons) gives the same UX outcome (counselors who know they need fresh narratives can get them) without the waste.
 
+**Serialised the recommendation-narratives batch *(2026-05-18 follow-up)*.** [app/counselor/interventions/page.tsx](app/counselor/interventions/page.tsx) used to fire `Promise.all(recommendations.map(...))` — when the cache was cold (e.g., right after the engine produced 26 new recommendations), that batched 26 concurrent Gemini calls in a single second. Free-tier Gemini is 15 RPM, so a chunk of the calls came back as `quota` fallbacks and the user saw "full request" hits in Google AI Studio. Replaced with a `for` loop: first cold visit is slower (~30s for 26 recommendations at ~1s each) but stays comfortably under any per-minute rate limit. Subsequent visits remain instant because every successful call writes to `AICache`. No change to the data model or UX — just the loop shape.
+
 ---
 
 **Known follow-ups (intentionally deferred):**
