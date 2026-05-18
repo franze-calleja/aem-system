@@ -14,10 +14,12 @@ type RiskNarrativeInput = {
   band: RiskBandLabel;
   factors: RiskFactors;
   consentRevoked?: boolean;
+  /** When true, ignore any cached narrative and re-call Gemini. */
+  forceRegenerate?: boolean;
 };
 
 export async function generateRiskNarrative(input: RiskNarrativeInput): Promise<GenerateResult> {
-  const { firstName, gradeLabel, score, band, factors, consentRevoked } = input;
+  const { firstName, gradeLabel, score, band, factors, consentRevoked, forceRegenerate } = input;
   const a = factors.breakdown.academic;
   const at = factors.breakdown.attendance;
   const b = factors.breakdown.behavioral;
@@ -44,6 +46,7 @@ export async function generateRiskNarrative(input: RiskNarrativeInput): Promise<
     prompt,
     kind: "RISK_NARRATIVE",
     consentRevoked,
+    forceRegenerate,
   });
 }
 

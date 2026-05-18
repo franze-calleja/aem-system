@@ -773,6 +773,41 @@ Production-readiness pass on three gaps surfaced during the QA review: brute-for
 - `PaginationBar` component renders prev/next links that preserve all other query params (filters, role, etc.)
 - Verified: 6 paginated routes return 200 on page 1, page 2, and out-of-range (page 99 clamps); Page 1 vs. Page 2 surface different rows.
 
+---
+
+### 7.8 AI narrative trigger model *(✅ 2026-05-18)*
+Documented + extended the existing on-demand narrative generation with explicit user-triggered controls. Default cadence stays lazy + cached; the new buttons let counselors take control when they need it.
+
+**Why this was needed.** The pre-existing system generates narratives at page-render time and caches by SHA-256 of (model + prompt). That means students whose profiles have never been opened have no cached narrative — looking at the cache, only 4/740 RISK_NARRATIVE rows existed because only 4 profiles had been visited. This is correct and cost-efficient, but invisible: a counselor browsing a long caseload sees "no narrative" for some students and assumes something is broken. The fix is to make the on-demand model explicit *and* give counselors a way to pre-warm before a meeting.
+
+**Design decisions** (after walking the trade-off space with the user):
+- **Keep lazy on-demand as the default.** Page-render generation + content-hash cache stays. No background pre-warming for every student — that would burn ~740 Gemini calls per engine run, most of them never read.
+- **Add a single-student "Regenerate" button.** For when a counselor knows context changed in ways the prompt template can't see (e.g., a manual override was applied right before opening the profile). Bypasses the cache, then router-refreshes the page so the new text shows.
+- **Add a batch "Pre-generate AI for this page" button on caseload.** Walks the current paginated 15 students, calls Gemini for misses, no-ops for cache hits. Sequential to keep token rate predictable. Useful pre-meeting prep.
+- **Skip the section/grade/school batch-level triggers.** School summary is already generated on every dashboard render. Recommendation narratives are batch-generated when the counselor opens `/counselor/interventions`. Section-level narratives don't exist as a UI surface (would be a Phase-8 feature).
+
+**Implementation:**
+- [lib/ai/gemini.ts](../lib/ai/gemini.ts) gained a `forceRegenerate` option on `generateText`. When true, the cache lookup is skipped and the response is upserted (not just created), replacing the prior cached row.
+- [lib/ai/narrative.ts](../lib/ai/narrative.ts) `generateRiskNarrative` plumbs the flag through.
+- New audit action `AI_NARRATIVE_GENERATED` ([migration 20260518140519](../prisma/migrations/20260518140519_add_ai_narrative_audit_action/migration.sql)). Logged on every actual fresh generation (not on cache hits, not on lazy renders — only when the user-triggered action runs Gemini for real).
+- [app/actions/ai/narrative.ts](../app/actions/ai/narrative.ts):
+  - `regenerateRiskNarrativeAction` (single student, force-regenerate, COUNSELOR + PRINCIPAL only)
+  - `prewarmCaseloadPageNarrativesAction` (batch, cache-respecting, returns `{generated, alreadyCached, skipped, pageSize}`)
+- [components/shell/regenerate-narrative-button.tsx](../components/shell/regenerate-narrative-button.tsx) wired into [student-profile-view.tsx](../components/shell/student-profile-view.tsx). Visible on both the success panel (so counselors can refresh) and the fallback panel (so they can retry quota/network/empty-response failures — but not `no_key` or `consent_revoked`, where retry is pointless).
+- [components/counselor/prewarm-caseload-button.tsx](../components/counselor/prewarm-caseload-button.tsx) wired into [counselor/caseload/page.tsx](../app/counselor/caseload/page.tsx), only shown when at least one student on the page has a risk score.
+- [StudentProfileData.enrollment](../lib/student/queries.ts) gained `schoolYearId` (was only `schoolYearLabel`) so the regenerate button has the ID it needs to pass to the action.
+
+**Verified:**
+- `npx tsc --noEmit` clean (after `npx prisma generate` to pick up the new enum); `npm run lint` clean; `npm run build` clean (27 routes).
+- Profile page renders the "Regenerate" button next to the "AI narrative" label.
+- Caseload page renders the "Pre-generate AI for this page" button in the header.
+- Lazy generation still works: visiting a previously unseen demo student profile added a new `AICache` row.
+- Audit log gains `AI_NARRATIVE_GENERATED` rows only when user-triggered actions run, not from lazy page renders.
+
+**Why not eager-on-engine-run.** Considered auto-pre-warming all 740 narratives whenever the admin runs the risk engine. Rejected: most narratives are never read, the cost is unpredictable, and the engine-run latency would balloon. The hybrid model (lazy default + manual buttons) gives the same UX outcome (counselors who know they need fresh narratives can get them) without the waste.
+
+---
+
 **Known follow-ups (intentionally deferred):**
 - Multi-instance Redis-backed rate limiter (one-line swap when we leave single-process)
 - The 12 unbounded `findMany` in [lib/intervention/queries.ts](../lib/intervention/queries.ts) — most are tightly filtered and used by detail pages (not lists), so the user-facing risk is small; revisit if any of them turn into general list endpoints

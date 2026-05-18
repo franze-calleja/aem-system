@@ -5,6 +5,7 @@ import { getCaseloadBandSummary, getCaseloadWithRiskPaged } from "@/lib/risk/que
 import { RiskBadge } from "@/components/shell/explainability-panel";
 import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shell/pagination-bar";
+import PrewarmCaseloadButton from "@/components/counselor/prewarm-caseload-button";
 
 export default async function CaseloadPage({
   searchParams,
@@ -39,17 +40,22 @@ export default async function CaseloadPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Caseload Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          {summary.total} student{summary.total === 1 ? "" : "s"} enrolled in {sy.label}.{" "}
-          {summary.scored === 0
-            ? "No risk scores computed yet — ask the admin to run the engine."
-            : `${summary.scored} scored · ${summary.high} HIGH · ${summary.moderate} MODERATE.`}
-        </p>
-        <p className="mt-1 text-xs text-slate-400">
-          Click a student to open the full academic + attendance + behavioral profile. For a global view of the highest-risk students across the whole caseload, open the Pattern Inbox.
-        </p>
+      <header className="flex flex-col gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Caseload Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            {summary.total} student{summary.total === 1 ? "" : "s"} enrolled in {sy.label}.{" "}
+            {summary.scored === 0
+              ? "No risk scores computed yet — ask the admin to run the engine."
+              : `${summary.scored} scored · ${summary.high} HIGH · ${summary.moderate} MODERATE.`}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Click a student to open the full academic + attendance + behavioral profile. For a global view of the highest-risk students across the whole caseload, open the Pattern Inbox.
+          </p>
+        </div>
+        {summary.scored > 0 && (
+          <PrewarmCaseloadButton schoolYearId={sy.id} page={pagination.page} />
+        )}
       </header>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-2">

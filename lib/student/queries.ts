@@ -102,6 +102,7 @@ export type StudentProfileData = {
   };
   enrollment: {
     id: string;
+    schoolYearId: string;
     schoolYearLabel: string;
     sectionName: string;
     gradeLevel: string;
@@ -232,6 +233,7 @@ export async function getStudentProfile(
     },
     enrollment: {
       id: enrollment.id,
+      schoolYearId: enrollment.schoolYearId,
       schoolYearLabel: enrollment.schoolYear.label,
       sectionName: enrollment.section.name,
       gradeLevel: enrollment.section.gradeLevel,

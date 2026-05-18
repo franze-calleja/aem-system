@@ -30,6 +30,15 @@ type GenerateOpts = {
   /** Override the cache key — useful if multiple prompts should share output. */
   cacheKey?: string;
   model?: string;
+  /**
+   * Force a fresh Gemini call, ignoring any existing cached row for this
+   * content hash. The freshly generated text replaces the cached row so
+   * subsequent reads see the new value. Use sparingly — every force-regen
+   * spends tokens. Wired to user-facing "Regenerate" buttons that exist
+   * precisely to override the cache when a counselor knows context has
+   * changed in ways the prompt template can't see.
+   */
+  forceRegenerate?: boolean;
 };
 
 const DEFAULT_MODEL = "gemini-flash-latest";
@@ -68,8 +77,10 @@ export async function generateText(
   const model = opts.model ?? DEFAULT_MODEL;
   const cacheKey = opts.cacheKey ?? hashContent(model, opts.prompt);
 
-  const cached = await prisma.aICache.findUnique({ where: { contentHash: cacheKey } });
-  if (cached) return { ok: true, text: cached.response, cached: true };
+  if (!opts.forceRegenerate) {
+    const cached = await prisma.aICache.findUnique({ where: { contentHash: cacheKey } });
+    if (cached) return { ok: true, text: cached.response, cached: true };
+  }
 
   const client = getClient();
   if (!client) return { ok: false, reason: "no_key" };
@@ -82,8 +93,12 @@ export async function generateText(
     const text = (result.text ?? "").trim();
     if (!text) return { ok: false, reason: "empty_response" };
 
-    await prisma.aICache.create({
-      data: {
+    // Upsert so force-regenerate replaces the prior cached text instead of
+    // colliding on the unique contentHash.
+    await prisma.aICache.upsert({
+      where: { contentHash: cacheKey },
+      update: { response: text, kind: opts.kind, prompt: opts.prompt, model },
+      create: {
         contentHash: cacheKey,
         kind: opts.kind,
         prompt: opts.prompt,
