@@ -69,9 +69,16 @@ const RULE_TO_RECOMMENDATION: Record<
   SUBJECT_STRUGGLE: {
     type: "SUBJECT_REMEDIATION",
     rationaleTemplate: (e) => {
-      const subjects = (e.strugglingSubjects as Array<{ subjectCode: string; failRate: number }>)
-        .map((s) => `${s.subjectCode} (${Math.round(s.failRate * 100)}% failing)`)
-        .join(", ");
+      const subjects = (
+        e.strugglingSubjects as Array<{ subjectCode: string; subjectName: string; failRate: number }>
+      )
+        .map((s) => {
+          const label = s.subjectName && s.subjectName !== s.subjectCode
+            ? `${s.subjectName} (${s.subjectCode})`
+            : s.subjectCode;
+          return `${label} — ${Math.round(s.failRate * 100)}% failing`;
+        })
+        .join("; ");
       return `Section is struggling in: ${subjects}. Subject-specific remedial sessions or teacher consultation is recommended.`;
     },
   },

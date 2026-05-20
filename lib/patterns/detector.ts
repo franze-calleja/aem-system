@@ -176,7 +176,14 @@ export async function detectSectionPatterns(
             select: { band: true },
           },
           attendance: { select: { status: true } },
-          grades: { select: { score: true, maxScore: true, subjectId: true } },
+          grades: {
+            select: {
+              score: true,
+              maxScore: true,
+              subjectId: true,
+              subject: { select: { code: true, name: true } },
+            },
+          },
         },
       },
     },
@@ -208,7 +215,7 @@ export async function detectSectionPatterns(
       for (const g of e.grades) {
         const sid = g.subjectId;
         if (!subjectMap.has(sid)) {
-          subjectMap.set(sid, { code: sid, name: sid, total: 0, failing: 0 });
+          subjectMap.set(sid, { code: g.subject.code, name: g.subject.name, total: 0, failing: 0 });
         }
         const entry = subjectMap.get(sid)!;
         entry.total++;
