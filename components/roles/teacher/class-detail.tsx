@@ -131,9 +131,30 @@ export default function ClassDetail(props: Props) {
 // ─── Roster ─────────────────────────────────────────────────────────────────
 
 function RosterTab({ students }: { students: Student[] }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? students.filter((s) => {
+        const name = `${s.firstName} ${s.lastName} ${s.middleName ?? ""}`.toLowerCase();
+        return name.includes(q) || s.lrn.includes(q);
+      })
+    : students;
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Class Roster</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Class Roster</h2>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name or LRN…"
+          className="min-w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+        />
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        {visible.length} of {students.length} student{students.length === 1 ? "" : "s"}
+      </p>
       <div className="mt-3 overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500">
@@ -146,7 +167,7 @@ function RosterTab({ students }: { students: Student[] }) {
             </tr>
           </thead>
           <tbody>
-            {students.map((s, i) => (
+            {visible.map((s, i) => (
               <tr key={s.enrollmentId} className="border-t border-slate-100">
                 <td className="px-3 py-2 text-slate-400">{i + 1}</td>
                 <td className="px-3 py-2 font-mono text-xs">{s.lrn}</td>
@@ -155,6 +176,13 @@ function RosterTab({ students }: { students: Student[] }) {
                 <td className="px-3 py-2">{s.spedStatus === "NONE" ? "—" : s.spedStatus}</td>
               </tr>
             ))}
+            {visible.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-center text-xs text-slate-500">
+                  No students match &ldquo;{query}&rdquo;.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

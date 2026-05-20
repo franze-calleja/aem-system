@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { setConsentAction } from "@/app/actions/admin/consent";
 import type { ConsentScope, ConsentStatus } from "@prisma/client";
 
@@ -33,80 +33,16 @@ type Props = {
 };
 
 export default function ConsentManager({ students, scopes }: Props) {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"ALL" | "REVOKED">("ALL");
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return students.filter((s) => {
-      if (filter === "REVOKED" && !s.consents.some((c) => c.status === "REVOKED")) {
-        return false;
-      }
-      if (!q) return true;
-      return (
-        s.name.toLowerCase().includes(q) ||
-        s.lrn.includes(q) ||
-        s.context.toLowerCase().includes(q)
-      );
-    });
-  }, [students, query, filter]);
-
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8">
-        <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Consent management</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Manage each student&apos;s consent for data processing, AI analysis, and intervention planning.
-          Revocations require a written justification and are recorded in the audit log.
-        </p>
-      </section>
-
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Students</h2>
-            <p className="mt-1 text-sm text-slate-600">{filtered.length} of {students.length}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, LRN, or section…"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm md:w-72"
-            />
-            <button
-              type="button"
-              onClick={() => setFilter("ALL")}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                filter === "ALL"
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-900"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("REVOKED")}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                filter === "REVOKED"
-                  ? "border-amber-500 bg-amber-50 text-amber-900"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              Has revocation
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-3">
-          {filtered.map((s) => (
+        <div className="flex flex-col gap-3">
+          {students.map((s) => (
             <StudentConsentRow key={s.id} student={s} scopes={scopes} />
           ))}
-          {filtered.length === 0 && (
+          {students.length === 0 && (
             <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-              No students match this filter.
+              No students match the current filter. Adjust or clear it above.
             </p>
           )}
         </div>

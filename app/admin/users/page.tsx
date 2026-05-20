@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import UsersManager from "@/components/roles/admin/users-manager";
 import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 
 const ROLE_FILTERS = ["ALL", "ADMIN", "TEACHER", "COUNSELOR", "PRINCIPAL"] as const;
 type RoleFilter = (typeof ROLE_FILTERS)[number];
+
+function param(sp: Record<string, string | string[] | undefined>, key: string): string | null {
+  const v = sp[key];
+  if (typeof v === "string" && v.trim() !== "") return v;
+  if (Array.isArray(v) && v[0]) return v[0];
+  return null;
+}
 
 export default async function AdminUsersPage({
   searchParams,
@@ -16,9 +23,17 @@ export default async function AdminUsersPage({
   const role: RoleFilter = (ROLE_FILTERS as readonly string[]).includes(rawRole)
     ? (rawRole as RoleFilter)
     : "ALL";
+  const search = param(sp, "q");
   const page = parsePageParam(sp.page);
 
-  const where = role === "ALL" ? {} : { role: role as Role };
+  const where: Prisma.UserWhereInput = {};
+  if (role !== "ALL") where.role = role as Role;
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ];
+  }
 
   const total = await prisma.user.count({ where });
   const pagination = paginate(total, page, PAGE_SIZE);
@@ -51,6 +66,7 @@ export default async function AdminUsersPage({
         assignmentCount: u._count.teacherAssignments,
       }))}
       currentRole={role}
+      currentSearch={search}
       pagination={pagination}
     />
   );

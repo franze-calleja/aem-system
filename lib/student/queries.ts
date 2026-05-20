@@ -10,6 +10,7 @@ import type {
   BehaviorSeverity,
   ConsentScope,
   ConsentStatus,
+  Prisma,
   Role,
   Sex,
   SpedStatus,
@@ -34,12 +35,40 @@ export type CaseloadRow = {
   behavioralIncidentCount: number;
 };
 
+type CaseloadFilters = {
+  search?: string | null;
+  sectionId?: string | null;
+  gradeLevel?: string | null;
+  spedStatus?: string | null;
+};
+
+function buildCaseloadWhere(schoolYearId: string, f: CaseloadFilters = {}): Prisma.StudentEnrollmentWhereInput {
+  const where: Prisma.StudentEnrollmentWhereInput = {
+    schoolYearId,
+    status: "ACTIVE",
+  };
+  if (f.sectionId) where.sectionId = f.sectionId;
+  if (f.gradeLevel) where.gradeLevel = f.gradeLevel;
+  const studentFilter: Prisma.StudentWhereInput = {};
+  const search = f.search?.trim();
+  if (search) {
+    studentFilter.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { lrn: { contains: search } },
+    ];
+  }
+  if (f.spedStatus) studentFilter.spedStatus = f.spedStatus as Prisma.StudentWhereInput["spedStatus"];
+  if (Object.keys(studentFilter).length > 0) where.student = studentFilter;
+  return where;
+}
+
 export async function getCaseload(
   schoolYearId: string,
-  opts?: { skip?: number; take?: number },
+  opts?: { skip?: number; take?: number } & CaseloadFilters,
 ): Promise<CaseloadRow[]> {
   const enrollments = await prisma.studentEnrollment.findMany({
-    where: { schoolYearId, status: "ACTIVE" },
+    where: buildCaseloadWhere(schoolYearId, opts ?? {}),
     include: {
       student: {
         select: {
@@ -79,9 +108,12 @@ export async function getCaseload(
   });
 }
 
-export async function getCaseloadCount(schoolYearId: string): Promise<number> {
+export async function getCaseloadCount(
+  schoolYearId: string,
+  f?: CaseloadFilters,
+): Promise<number> {
   return prisma.studentEnrollment.count({
-    where: { schoolYearId, status: "ACTIVE" },
+    where: buildCaseloadWhere(schoolYearId, f ?? {}),
   });
 }
 

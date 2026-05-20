@@ -810,6 +810,38 @@ Documented + extended the existing on-demand narrative generation with explicit 
 
 ---
 
+### 7.9 Search + filters on list pages *(✅ 2026-05-20)*
+Counselors, principals, teachers, and admin couldn't find specific students except by paging through 15-row tables. This pass adds server-side search + filter URL state to every student-facing list, plus the user-management list.
+
+**Shared toolbar** — [components/shell/list-toolbar.tsx](../components/shell/list-toolbar.tsx).
+- Single `<ListToolbar>` component with: search input + arbitrary filter dropdowns + active-filter pills (each removable) + Apply/Clear buttons
+- All URL-state — submit is a plain GET form, no client JS state machinery
+- `toForwardParams(...)` helper turns the current filter set into the shape `PaginationBar` expects so page links preserve every filter
+
+**Pages wired:**
+- `/counselor/caseload` — name/LRN search + risk band (HIGH/MODERATE/LOW/UNSCORED) + grade + section. Band filter **respects principal overrides** (Diego overridden to MODERATE shows up under MODERATE, not his algorithmic HIGH). Implementation: `getCaseloadWithRiskPaged` resolves matching enrollment IDs in a separate query when band is set, then constrains the main paginated query to that set.
+- `/principal/students` — name/LRN search + grade + section + SPED status. Server-side filter via `buildCaseloadWhere` extracted from [lib/student/queries.ts](../lib/student/queries.ts).
+- `/admin/consent` — name/LRN search + status (`ANY_REVOKED` / `ALL_GRANTED`). Refactored from client-state filter (with all 420 students loaded) to server-side filter + pagination. Removed ~50 lines of redundant in-component search/filter UI from [components/roles/admin/consent-manager.tsx](../components/roles/admin/consent-manager.tsx).
+- `/admin/users` — added name/email search on top of the existing role-filter pills. Search + role filter compose correctly (URL state preserves both when paginating).
+- `/teacher/student-risk` — name/LRN search + risk band + section. In-app filtering (small N per teacher: ≤6 sections × ≤40 students), grouped output preserved.
+- `/teacher/my-classes/[classId]` — roster tab gets a small client-side name/LRN search (already a client component, useState was the right tool).
+
+**Other pages:**
+- `/admin/audit` already has filters (action, resourceType, userId, from, to). Unchanged.
+- `/principal/cohort-analysis` already has grade + multi-year picker. Unchanged.
+- Workflow lists (`/counselor/interventions`, `/counselor/patterns`, `/counselor/feedback`, `/teacher/intervention-feedback`) were *not* in scope this pass per the "student-finding pages only" decision — log as follow-up.
+
+**Verified:**
+- `npx tsc --noEmit` clean, `npm run lint` clean (no new warnings), `npm run build` clean.
+- 16 query-string variants across 4 roles all return 200.
+- DB-truth correctness check: page header counts match raw SQL counts — principal/students with `q=maria` shows 6 matches out of 260; `Grade 9 + IEP` shows 7 matches.
+
+**Known follow-ups:**
+- Wire search/filter on the workflow lists (`/counselor/interventions`, `/counselor/patterns`, `/counselor/feedback`, `/teacher/intervention-feedback`). Small lists today but useful when intervention volume grows.
+- Replace the two-query workaround in `getCaseloadWithRiskPaged` (band filter → resolve IDs → main query) with a single raw-SQL CTE + window function once we have a real reason to optimize.
+
+---
+
 **Known follow-ups (intentionally deferred):**
 - Multi-instance Redis-backed rate limiter (one-line swap when we leave single-process)
 - The 12 unbounded `findMany` in [lib/intervention/queries.ts](../lib/intervention/queries.ts) — most are tightly filtered and used by detail pages (not lists), so the user-facing risk is small; revisit if any of them turn into general list endpoints

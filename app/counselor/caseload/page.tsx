@@ -1,11 +1,30 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getActiveSchoolYear } from "@/lib/active-year";
-import { getCaseloadBandSummary, getCaseloadWithRiskPaged } from "@/lib/risk/queries";
+import {
+  getCaseloadBandSummary,
+  getCaseloadWithRiskPaged,
+  getSectionsAndGradesForYear,
+} from "@/lib/risk/queries";
 import { RiskBadge } from "@/components/shell/explainability-panel";
 import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shell/pagination-bar";
 import PrewarmCaseloadButton from "@/components/counselor/prewarm-caseload-button";
+import { ListToolbar, toForwardParams, type FilterSpec } from "@/components/shell/list-toolbar";
+
+const BAND_OPTIONS = [
+  { value: "HIGH", label: "HIGH" },
+  { value: "MODERATE", label: "MODERATE" },
+  { value: "LOW", label: "LOW" },
+  { value: "UNSCORED", label: "Unscored" },
+];
+
+function param(sp: Record<string, string | string[] | undefined>, key: string): string | null {
+  const v = sp[key];
+  if (typeof v === "string" && v.trim() !== "") return v;
+  if (Array.isArray(v) && v[0]) return v[0];
+  return null;
+}
 
 export default async function CaseloadPage({
   searchParams,
@@ -22,11 +41,33 @@ export default async function CaseloadPage({
 
   const sp = await searchParams;
   const requestedPage = parsePageParam(sp.page);
-  const summary = await getCaseloadBandSummary(sy.id);
-  const pagination = paginate(summary.total, requestedPage, PAGE_SIZE);
+  const search = param(sp, "q");
+  const band = param(sp, "band");
+  const sectionId = param(sp, "sectionId");
+  const gradeLevel = param(sp, "gradeLevel");
+
+  const [summary, sectionsAndGrades] = await Promise.all([
+    getCaseloadBandSummary(sy.id),
+    getSectionsAndGradesForYear(sy.id),
+  ]);
+
+  // Run the query once to get total + page rows under the active filters.
+  const initial = await getCaseloadWithRiskPaged(sy.id, {
+    skip: 0,
+    take: 0, // probe count only
+    search,
+    sectionId,
+    gradeLevel,
+    band,
+  });
+  const pagination = paginate(initial.total, requestedPage, PAGE_SIZE);
   const { rows } = await getCaseloadWithRiskPaged(sy.id, {
     skip: pagination.skip,
     take: pagination.take,
+    search,
+    sectionId,
+    gradeLevel,
+    band,
   });
 
   // Within the visible page, surface higher-risk rows first. Full-population
@@ -38,6 +79,25 @@ export default async function CaseloadPage({
     return b.riskScore - a.riskScore;
   });
 
+  const filters: FilterSpec[] = [
+    { name: "band", label: "Risk band", value: band, options: BAND_OPTIONS },
+    {
+      name: "gradeLevel",
+      label: "Grade",
+      value: gradeLevel,
+      options: sectionsAndGrades.gradeLevels.map((g) => ({ value: g, label: g })),
+    },
+    {
+      name: "sectionId",
+      label: "Section",
+      value: sectionId,
+      options: sectionsAndGrades.sections.map((s) => ({ value: s.id, label: s.label })),
+    },
+  ];
+  const forwardParams = toForwardParams("q", search, filters);
+
+  const filtered = pagination.total !== summary.total;
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-3">
@@ -48,11 +108,22 @@ export default async function CaseloadPage({
             {summary.scored === 0
               ? "No risk scores computed yet — ask the admin to run the engine."
               : `${summary.scored} scored · ${summary.high} HIGH · ${summary.moderate} MODERATE.`}
+            {filtered && (
+              <span className="ml-1 text-amber-700">
+                ({pagination.total} match{pagination.total === 1 ? "" : "es"} the current filter)
+              </span>
+            )}
           </p>
           <p className="mt-1 text-xs text-slate-400">
             Click a student to open the full academic + attendance + behavioral profile. For a global view of the highest-risk students across the whole caseload, open the Pattern Inbox.
           </p>
         </div>
+        <ListToolbar
+          basePath="/counselor/caseload"
+          searchPlaceholder="Search name or LRN…"
+          searchValue={search}
+          filters={filters}
+        />
         {summary.scored > 0 && (
           <PrewarmCaseloadButton schoolYearId={sy.id} page={pagination.page} />
         )}
@@ -95,7 +166,9 @@ export default async function CaseloadPage({
               {sorted.length === 0 && (
                 <tr>
                   <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={5}>
-                    No students on this page.
+                    {filtered
+                      ? "No students match the current filter. Adjust or clear it above."
+                      : "No students on this page."}
                   </td>
                 </tr>
               )}
@@ -103,7 +176,11 @@ export default async function CaseloadPage({
           </table>
         </div>
         <div className="border-t border-slate-100 px-3 py-3">
-          <PaginationBar pagination={pagination} basePath="/counselor/caseload" forwardParams={{}} />
+          <PaginationBar
+            pagination={pagination}
+            basePath="/counselor/caseload"
+            forwardParams={forwardParams}
+          />
         </div>
       </div>
     </div>

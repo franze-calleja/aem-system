@@ -34,14 +34,21 @@ const ROLE_LABELS: Record<Role, string> = {
 export default function UsersManager({
   users,
   currentRole,
+  currentSearch,
   pagination,
 }: {
   users: UserRow[];
   currentRole: RoleFilter;
+  currentSearch: string | null;
   pagination: Pagination;
 }) {
-  const filterHref = (role: RoleFilter) =>
-    role === "ALL" ? "/admin/users" : `/admin/users?role=${role}`;
+  const filterHref = (role: RoleFilter) => {
+    const params = new URLSearchParams();
+    if (role !== "ALL") params.set("role", role);
+    if (currentSearch) params.set("q", currentSearch);
+    const qs = params.toString();
+    return qs ? `/admin/users?${qs}` : "/admin/users";
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,30 +63,57 @@ export default function UsersManager({
       <CreateUserCard />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Accounts</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              {pagination.total.toLocaleString()} matching
-              {currentRole !== "ALL" ? ` ${ROLE_LABELS[currentRole]}` : ""}
-            </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Accounts</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {pagination.total.toLocaleString()} matching
+                {currentRole !== "ALL" ? ` ${ROLE_LABELS[currentRole]}` : ""}
+                {currentSearch ? ` · search "${currentSearch}"` : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["ALL", "ADMIN", "TEACHER", "COUNSELOR", "PRINCIPAL"] as const).map((r) => (
+                <Link
+                  key={r}
+                  href={filterHref(r)}
+                  prefetch={false}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    currentRole === r
+                      ? "border-indigo-500 bg-indigo-50 text-indigo-900"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {r === "ALL" ? "All" : ROLE_LABELS[r]}
+                </Link>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(["ALL", "ADMIN", "TEACHER", "COUNSELOR", "PRINCIPAL"] as const).map((r) => (
+          <form method="GET" action="/admin/users" className="flex flex-wrap items-center gap-2">
+            {currentRole !== "ALL" && <input type="hidden" name="role" value={currentRole} />}
+            <input
+              type="search"
+              name="q"
+              defaultValue={currentSearch ?? ""}
+              placeholder="Search name or email…"
+              className="min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+              Search
+            </button>
+            {currentSearch && (
               <Link
-                key={r}
-                href={filterHref(r)}
-                prefetch={false}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  currentRole === r
-                    ? "border-indigo-500 bg-indigo-50 text-indigo-900"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
+                href={currentRole === "ALL" ? "/admin/users" : `/admin/users?role=${currentRole}`}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
               >
-                {r === "ALL" ? "All" : ROLE_LABELS[r]}
+                Clear search
               </Link>
-            ))}
-          </div>
+            )}
+          </form>
         </div>
 
         <div className="mt-4 overflow-x-auto">
@@ -132,7 +166,10 @@ export default function UsersManager({
           <PaginationBar
             pagination={pagination}
             basePath="/admin/users"
-            forwardParams={{ role: currentRole === "ALL" ? undefined : currentRole }}
+            forwardParams={{
+              role: currentRole === "ALL" ? undefined : currentRole,
+              q: currentSearch ?? undefined,
+            }}
           />
         </div>
       </section>

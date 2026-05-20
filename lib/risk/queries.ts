@@ -2,6 +2,7 @@
 // All callers verify RBAC before calling — these are not self-guarding.
 
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import type { RiskBandLabel } from "@/lib/risk/types";
 import type { RiskFactors } from "@/lib/risk/types";
 
@@ -53,20 +54,61 @@ export type CaseloadRiskRow = {
 
 // Page-aware caseload load. Returns the rows for the requested page (ordered
 // by student name) + the total count so the caller can render pagination.
-// Note: sorting by risk score is *not* done at this layer because score lives
-// in a related table; the per-page rows can be re-sorted by score in the UI
-// for the visible window (cheap). For a global "show me the highest-risk
-// student across all 2k" workflow, point counselors at the Pattern Inbox or
-// add a dedicated raw-SQL query later.
+//
+// Filters:
+//   - `search` matches against student first/last name and LRN (case-insensitive)
+//   - `sectionId` exact match
+//   - `gradeLevel` exact match (e.g., "Grade 9")
+//   - `band` filters on the *displayed* band — respects principal overrides.
+//     Special value "UNSCORED" matches enrollments with no RiskAssessment.
+//
+// Band filtering uses a two-step approach: first resolve the candidate
+// enrollment IDs (after override application), then `findMany({ where: { id: { in } } })`.
+// Cheap up to a few thousand rows; for true scale this would become a raw
+// SQL CTE with a window function over RiskAssessment.
 export async function getCaseloadWithRiskPaged(
   schoolYearId: string,
-  opts: { skip: number; take: number },
+  opts: {
+    skip: number;
+    take: number;
+    search?: string | null;
+    sectionId?: string | null;
+    gradeLevel?: string | null;
+    band?: string | null; // "LOW" | "MODERATE" | "HIGH" | "UNSCORED" | null
+  },
 ): Promise<{ rows: CaseloadRiskRow[]; total: number }> {
-  const where = { schoolYearId, status: "ACTIVE" as const };
+  const search = opts.search?.trim();
+  const baseWhere: Prisma.StudentEnrollmentWhereInput = {
+    schoolYearId,
+    status: "ACTIVE",
+  };
+  if (opts.sectionId) baseWhere.sectionId = opts.sectionId;
+  if (opts.gradeLevel) baseWhere.gradeLevel = opts.gradeLevel;
+  if (search) {
+    baseWhere.student = {
+      OR: [
+        { firstName: { contains: search, mode: "insensitive" } },
+        { lastName: { contains: search, mode: "insensitive" } },
+        { lrn: { contains: search } },
+      ],
+    };
+  }
+
+  // Band filter — extra step. Resolve the enrollment IDs whose *displayed*
+  // band matches, then constrain the main query to that set.
+  if (opts.band) {
+    const bandEnrollmentIds = await resolveEnrollmentIdsByDisplayedBand(
+      schoolYearId,
+      opts.band,
+      baseWhere,
+    );
+    baseWhere.id = { in: bandEnrollmentIds };
+  }
+
   const [total, enrollments] = await Promise.all([
-    prisma.studentEnrollment.count({ where }),
+    prisma.studentEnrollment.count({ where: baseWhere }),
     prisma.studentEnrollment.findMany({
-      where,
+      where: baseWhere,
       include: {
         student: { select: { id: true, lrn: true, firstName: true, lastName: true } },
         section: { select: { name: true, gradeLevel: true } },
@@ -111,6 +153,61 @@ export async function getCaseloadWithRiskPaged(
   });
 
   return { rows, total };
+}
+
+// Internal: given a desired displayed band (override-aware), find the matching
+// enrollment IDs within the prefilter (so name search/section/grade already
+// constrain the candidate set).
+async function resolveEnrollmentIdsByDisplayedBand(
+  schoolYearId: string,
+  band: string,
+  prefilter: Prisma.StudentEnrollmentWhereInput,
+): Promise<string[]> {
+  const candidates = await prisma.studentEnrollment.findMany({
+    where: { ...prefilter, id: undefined }, // strip the band-constraint if any
+    select: {
+      id: true,
+      riskAssessments: {
+        orderBy: { computedAt: "desc" },
+        take: 1,
+        select: { band: true },
+      },
+      riskOverrides: {
+        where: { clearedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { overrideBand: true },
+      },
+    },
+  });
+  return candidates
+    .filter((e) => {
+      const displayed = e.riskOverrides[0]?.overrideBand ?? e.riskAssessments[0]?.band ?? null;
+      if (band === "UNSCORED") return displayed === null;
+      return displayed === band;
+    })
+    .map((e) => e.id);
+}
+
+// Sections + grade levels for use in filter dropdowns. Cheap, separate call.
+export async function getSectionsAndGradesForYear(schoolYearId: string): Promise<{
+  sections: Array<{ id: string; label: string; gradeLevel: string }>;
+  gradeLevels: string[];
+}> {
+  const sections = await prisma.section.findMany({
+    where: { schoolYearId },
+    select: { id: true, name: true, gradeLevel: true },
+    orderBy: [{ gradeLevel: "asc" }, { name: "asc" }],
+  });
+  const gradeLevels = Array.from(new Set(sections.map((s) => s.gradeLevel))).sort();
+  return {
+    sections: sections.map((s) => ({
+      id: s.id,
+      label: `${s.gradeLevel} · ${s.name}`,
+      gradeLevel: s.gradeLevel,
+    })),
+    gradeLevels,
+  };
 }
 
 // Aggregate band counts across the entire caseload — independent of pagination
