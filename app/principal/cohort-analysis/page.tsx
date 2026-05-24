@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getCohortAnalysis, type CohortYearSlice } from "@/lib/risk/queries";
+import CohortForm from "./cohort-form";
 
 type SearchParams = {
   grade?: string;
@@ -79,81 +80,14 @@ export default async function PrincipalCohortAnalysisPage({
         </p>
       </header>
 
-      <form
-        method="GET"
-        className="rounded-2xl border border-slate-200 bg-white p-5"
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Grade level</span>
-            <select
-              name="grade"
-              defaultValue={selectedGrade ?? ""}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-            >
-              {gradeOptions.length === 0 && <option value="">(no sections in any year)</option>}
-              {gradeOptions.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-          </label>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">School years</legend>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-              {allYears.map((y) => (
-                <label key={y.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="years_check"
-                    value={y.id}
-                    defaultChecked={selectedYearIds.includes(y.id)}
-                    data-year-checkbox
-                  />
-                  <span>{y.label}{y.isActive ? " (active)" : ""}</span>
-                </label>
-              ))}
-            </div>
-            {/* Hidden CSV-friendly field carrying the joined ids, populated by
-                a tiny inline script on submit. Avoids ?years_check=a&years_check=b
-                inflation when bouncing back to GET-form-with-defaults. */}
-            <input type="hidden" name="years" defaultValue={selectedYearIds.join(",")} id="years-hidden" />
-          </fieldset>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-          >
-            Update view
-          </button>
-          {slices.length > 0 && (
-            <a
-              href={`/principal/cohort-analysis?${buildQuery(selectedGrade ?? "", selectedYearIds, "csv")}`}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
-            >
-              Export CSV
-            </a>
-          )}
-        </div>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function () {
-                const form = document.currentScript.closest('form');
-                if (!form) return;
-                form.addEventListener('submit', function () {
-                  const checks = form.querySelectorAll('[data-year-checkbox]');
-                  const ids = [];
-                  checks.forEach(function (c) { if (c.checked) ids.push(c.value); });
-                  const hidden = form.querySelector('#years-hidden');
-                  if (hidden) hidden.value = ids.join(',');
-                  checks.forEach(function (c) { c.disabled = true; });
-                });
-              })();
-            `,
-          }}
-        />
-      </form>
+      <CohortForm
+        gradeOptions={gradeOptions}
+        allYears={allYears}
+        selectedGrade={selectedGrade}
+        selectedYearIds={selectedYearIds}
+        hasSlices={slices.length > 0}
+        csvHref={`/principal/cohort-analysis?${buildQuery(selectedGrade ?? "", selectedYearIds, "csv")}`}
+      />
 
       {slices.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">

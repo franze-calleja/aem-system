@@ -10,7 +10,6 @@ import {
 } from "@/lib/teacher/queries";
 import { getSectionRiskForTeacher } from "@/lib/risk/queries";
 import ClassDetail from "@/components/roles/teacher/class-detail";
-import SectionRiskCard from "@/components/roles/teacher/section-risk-card";
 
 export default async function ClassDetailPage({
   params,
@@ -51,11 +50,6 @@ export default async function ClassDetailPage({
         ← Back to My Classes
       </Link>
 
-      <SectionRiskCard
-        rows={sectionRisk}
-        sectionLabel={`${detail.assignment.section.gradeLevel} · ${detail.assignment.section.name}`}
-      />
-
       <ClassDetail
         assignmentId={detail.assignment.id}
         sectionLabel={`${detail.assignment.section.gradeLevel} – ${detail.assignment.section.name}`}
@@ -92,6 +86,13 @@ export default async function ClassDetailPage({
           severity: b.severity,
           description: b.description,
           recordedByName: b.recordedBy?.name ?? null,
+        }))}
+        sectionRisk={sectionRisk.map((r) => ({
+          enrollmentId: r.enrollmentId,
+          firstName: r.firstName,
+          lastName: r.lastName,
+          riskScore: r.riskScore,
+          riskBand: r.riskBand,
         }))}
       />
     </div>
