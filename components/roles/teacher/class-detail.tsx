@@ -335,6 +335,7 @@ export default function ClassDetail(props: Props) {
 // ─── Risk ────────────────────────────────────────────────────────────────────
 
 function RiskTab({ rows, sectionLabel }: { rows: StudentRisk[]; sectionLabel: string }) {
+  const [query, setQuery] = useState("");
   const total = rows.length;
   let high = 0, moderate = 0, low = 0, unscored = 0;
   for (const r of rows) {
@@ -347,6 +348,10 @@ function RiskTab({ rows, sectionLabel }: { rows: StudentRisk[]; sectionLabel: st
   const sorted = [...rows]
     .filter((r) => r.riskScore !== null)
     .sort((a, b) => (b.riskScore ?? -1) - (a.riskScore ?? -1));
+
+  const visibleRows = query.trim()
+    ? sorted.filter((r) => `${r.firstName} ${r.lastName}`.toLowerCase().includes(query.trim().toLowerCase()))
+    : sorted;
 
   const BAND_CONFIG = {
     HIGH: { label: "HIGH", bg: "border-rose-200 bg-rose-50 text-rose-700", dot: "bg-rose-500", badge: "bg-rose-50 text-rose-700 border-rose-200" },
@@ -401,11 +406,20 @@ function RiskTab({ rows, sectionLabel }: { rows: StudentRisk[]; sectionLabel: st
       {/* Full student list sorted by risk */}
       {sorted.length > 0 ? (
         <div className="mt-5">
+          <div className="mb-3">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search student by name…"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            />
+          </div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             All students by risk score
           </p>
           <ul className="mt-2 divide-y divide-slate-100">
-            {sorted.map((r, i) => {
+            {visibleRows.map((r, i) => {
               const band = r.riskBand as "HIGH" | "MODERATE" | "LOW";
               const cfg = BAND_CONFIG[band];
               const pct = r.riskScore !== null ? Math.round(r.riskScore) : null;
@@ -423,6 +437,11 @@ function RiskTab({ rows, sectionLabel }: { rows: StudentRisk[]; sectionLabel: st
                 </li>
               );
             })}
+            {visibleRows.length === 0 && (
+              <li className="py-6 text-center text-sm text-slate-400">
+                No students match &ldquo;{query}&rdquo;.
+              </li>
+            )}
           </ul>
         </div>
       ) : (
@@ -543,6 +562,7 @@ function AttendanceTab({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const onDateChange = (next: string) => {
     const clamped = clampDate(next);
@@ -601,14 +621,34 @@ function AttendanceTab({
     return c;
   }, [draft, students]);
 
+  const visibleStudents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) => {
+      const name = `${s.firstName} ${s.lastName} ${s.middleName ?? ""}`.toLowerCase();
+      return name.includes(q) || s.lrn.includes(q);
+    });
+  }, [students, query]);
+
   const displayDate = formatDateDisplay(date);
+  const isToday = date === todayIso;
+  const dateCardClassName = isToday
+    ? "bg-emerald-50"
+    : "bg-slate-50";
+  const dateWeekdayClassName = isToday
+    ? "text-emerald-600"
+    : "text-slate-500";
+  const dateValueClassName = isToday
+    ? "text-emerald-900"
+    : "text-slate-900";
+  const dateYearClassName = isToday
+    ? "text-emerald-700"
+    : "text-slate-500";
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[15rem,1fr]">
-      {/* Date sidebar */}
-      <aside className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-        {/* Prev / current / next */}
-        <div className="flex items-center gap-1">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:justify-between">
+        <div className="flex w-full flex-wrap items-stretch gap-2 lg:flex-1">
           <button
             type="button"
             onClick={() => onDateChange(shiftDay(date, -1))}
@@ -618,10 +658,12 @@ function AttendanceTab({
           >
             ‹
           </button>
-          <div className="flex-1 rounded-xl bg-emerald-50 px-3 py-2 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-600">{displayDate.weekday}</p>
-            <p className="mt-0.5 text-sm font-bold text-emerald-900">{displayDate.date}</p>
-            <p className="text-[11px] text-emerald-700">{displayDate.year}</p>
+          <div className={`flex min-w-0 flex-1 flex-col justify-center rounded-xl px-4 text-left ${dateCardClassName}`}>
+            <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${dateWeekdayClassName}`}>{displayDate.weekday}</p>
+            <div className="mt-0.5 flex flex-wrap items-end gap-x-2 gap-y-0.5">
+              <p className={`text-base font-bold leading-none ${dateValueClassName}`}>{displayDate.date}</p>
+              <p className={`text-base font-bold leading-none ${dateYearClassName}`}>{displayDate.year}</p>
+            </div>
           </div>
           <button
             type="button"
@@ -632,67 +674,57 @@ function AttendanceTab({
           >
             ›
           </button>
+          {date !== todayIso && todayIso >= fromIso && todayIso <= toIso && (
+            <button
+              type="button"
+              onClick={() => onDateChange(todayIso)}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              Jump to Today
+            </button>
+          )}
         </div>
 
-        {/* Jump to today */}
-        {date !== todayIso && todayIso >= fromIso && todayIso <= toIso && (
-          <button
-            type="button"
-            onClick={() => onDateChange(todayIso)}
-            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-          >
-            Jump to Today
-          </button>
-        )}
-
-        {/* Manual date picker */}
-        <div>
-          <label className="block text-[11px] font-medium text-slate-500">Pick any date</label>
-          <input
-            type="date"
-            value={date}
-            min={fromIso}
-            max={toIso}
-            onChange={(e) => onDateChange(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-          />
-        </div>
-
-
-      </aside>
-
-      {/* Attendance sheet */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">{formatDateLong(date)}</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Click a status button — or focus a row and press{" "}
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">P</kbd>{" "}
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">A</kbd>{" "}
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">T</kbd>{" "}
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">E</kbd>{" "}
-              then <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">↓</kbd>{" "}
-              to move down.
-            </p>
+        <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-stretch lg:justify-end">
+          <div className="flex h-14 min-w-0 items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 lg:w-72">
+            <label className="shrink-0 text-[11px] font-medium text-slate-500">Pick any date</label>
+            <input
+              type="date"
+              value={date}
+              min={fromIso}
+              max={toIso}
+              onChange={(e) => onDateChange(e.target.value)}
+              className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm outline-none focus:ring-0"
+            />
           </div>
-          {/* Summary badges */}
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex h-14 flex-wrap items-stretch gap-2 lg:justify-end">
             {(["PRESENT", "ABSENT", "TARDY", "EXCUSED"] as const).map((st) => (
               <span
                 key={st}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                className={`inline-flex h-full items-center gap-2 rounded-xl border px-3 text-xs font-semibold ${
                   STATUS_CONFIG[st].badge
                 }`}
               >
                 {STATUS_CONFIG[st].label}
-                <span className="min-w-[18px] rounded-full bg-white/70 px-1 text-center tabular-nums">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-white/70 text-center tabular-nums">
                   {counts[st]}
                 </span>
               </span>
             ))}
           </div>
-        </header>
+        </div>
+      </header>
+
+        <div className="mt-4">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search student by name or LRN…"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          />
+        </div>
 
         {/* Mark all row */}
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5">
@@ -720,7 +752,7 @@ function AttendanceTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {students.map((s, i) => {
+              {visibleStudents.map((s, i) => {
                 const status = draft[s.enrollmentId] ?? "PRESENT";
                 return (
                   <tr
@@ -756,6 +788,13 @@ function AttendanceTab({
                   </tr>
                 );
               })}
+              {visibleStudents.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-400">
+                    No students match &ldquo;{query}&rdquo;.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -779,7 +818,6 @@ function AttendanceTab({
             {pending ? "Saving…" : `Save Attendance — ${formatDateShort(date)}`}
           </button>
         </div>
-      </div>
     </section>
   );
 }
@@ -809,6 +847,7 @@ function GradebookTab({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const gradesByEnrollment = useMemo(() => {
     const map = new Map<string, Grade[]>();
@@ -889,6 +928,15 @@ function GradebookTab({
     }
     return relevant[0] ?? null;
   };
+
+  const visibleStudents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) => {
+      const name = `${s.firstName} ${s.lastName} ${s.middleName ?? ""}`.toLowerCase();
+      return name.includes(q);
+    });
+  }, [students, query]);
 
   const maxScoreNum = Number(setupMax);
   const setupValid = Number.isFinite(maxScoreNum) && maxScoreNum > 0;
@@ -1083,6 +1131,16 @@ function GradebookTab({
         </p>
       )}
 
+      <div className="mt-4">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search student by name…"
+          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+        />
+      </div>
+
       {/* Pivot table */}
       <div className="mt-4 overflow-x-auto">
         <table className="min-w-full text-left text-sm">
@@ -1126,7 +1184,7 @@ function GradebookTab({
                 </td>
               </tr>
             )}
-            {students.map((s, i) => {
+            {visibleStudents.map((s, i) => {
               const allQ = quarterGrades.get(s.enrollmentId) ?? [];
               const filtered = kindFilter === "ALL" ? allQ : allQ.filter((g) => g.assessmentKind === kindFilter);
               const avg = calcAvg(filtered);
@@ -1195,6 +1253,13 @@ function GradebookTab({
                 </tr>
               );
             })}
+            {visibleStudents.length === 0 && students.length > 0 && (
+              <tr>
+                <td colSpan={totalCols} className="px-4 py-8 text-center text-sm text-slate-400">
+                  No students match &ldquo;{query}&rdquo;.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -1254,6 +1319,7 @@ function BehavioralTab({
   const [description, setDescription] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const submit = () => {
     setError(null);
@@ -1275,6 +1341,16 @@ function BehavioralTab({
     students.forEach((s) => m.set(s.enrollmentId, s));
     return m;
   }, [students]);
+
+  const visibleBehavioral = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return behavioral;
+    return behavioral.filter((b) => {
+      const s = studentLookup.get(b.enrollmentId);
+      if (!s) return false;
+      return `${s.firstName} ${s.lastName} ${s.middleName ?? ""}`.toLowerCase().includes(q);
+    });
+  }, [behavioral, query, studentLookup]);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -1397,15 +1473,30 @@ function BehavioralTab({
       )}
 
       {/* Records list */}
+      {behavioral.length > 0 && (
+        <div className="mt-4">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search student by name…"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          />
+        </div>
+      )}
       {behavioral.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-slate-200 py-10 text-center">
           <p className="text-2xl">📋</p>
           <p className="mt-2 text-sm font-medium text-slate-500">No behavioral records yet</p>
           <p className="mt-1 text-xs text-slate-400">Click &ldquo;+ Log Incident&rdquo; above to add the first one.</p>
         </div>
+      ) : visibleBehavioral.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-dashed border-slate-200 py-6 text-center">
+          <p className="text-sm text-slate-400">No records match &ldquo;{query}&rdquo;.</p>
+        </div>
       ) : (
         <ul className="mt-4 divide-y divide-slate-100">
-          {behavioral.map((b) => {
+          {visibleBehavioral.map((b) => {
             const s = studentLookup.get(b.enrollmentId);
             return (
               <li key={b.id} className="py-4">

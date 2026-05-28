@@ -5,12 +5,35 @@ import {
   getInterventionsForYear,
   getInterventionsCountForYear,
   getOutcomeTracking,
+  type InterventionFilters,
 } from "@/lib/intervention/queries";
 import { getOpenRecommendations } from "@/lib/risk/queries";
 import { prisma } from "@/lib/prisma";
 import { generateRecommendationNarrative, fallbackMessage } from "@/lib/ai/narrative";
 import { paginate, parsePageParam, PAGE_SIZE } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shell/pagination-bar";
+import type { InterventionStatus, InterventionType, PatternScope } from "@prisma/client";
+
+const INTERVENTION_STATUSES: InterventionStatus[] = [
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "ACTIVE",
+  "COMPLETED",
+  "CANCELLED",
+];
+
+const INTERVENTION_TYPES: InterventionType[] = [
+  "ACADEMIC_SUPPORT",
+  "COUNSELING_SESSION",
+  "IMMEDIATE_COUNSELING",
+  "POSITIVE_REINFORCEMENT",
+  "CASE_REVIEW",
+  "SECTION_INTERVENTION",
+  "SUBJECT_REMEDIATION",
+  "ATTENDANCE_PROGRAM",
+];
+
+const SCOPE_VALUES: PatternScope[] = ["STUDENT", "SECTION", "GRADE", "SCHOOL"];
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "border-slate-200 bg-slate-50 text-slate-600",
@@ -43,15 +66,68 @@ export default async function CounselorInterventionsPage({
   }
 
   const sp = await searchParams;
+
+  // ── Parse filter params ────────────────────────────────────────────────────
+  const filterStatus =
+    typeof sp.status === "string" && INTERVENTION_STATUSES.includes(sp.status as InterventionStatus)
+      ? (sp.status as InterventionStatus)
+      : undefined;
+  const filterScope =
+    typeof sp.scope === "string" && SCOPE_VALUES.includes(sp.scope as PatternScope)
+      ? (sp.scope as PatternScope)
+      : undefined;
+  const filterType =
+    typeof sp.type === "string" && INTERVENTION_TYPES.includes(sp.type as InterventionType)
+      ? (sp.type as InterventionType)
+      : undefined;
+  const filterSectionId = typeof sp.section === "string" && sp.section ? sp.section : undefined;
+  const filterQ = typeof sp.q === "string" && sp.q ? sp.q : undefined;
+  // Separate param for the recommendations section filter.
+  const filterRecSectionId = typeof sp.recSection === "string" && sp.recSection ? sp.recSection : undefined;
+
+  const filters: InterventionFilters = {
+    status: filterStatus,
+    scope: filterScope,
+    type: filterType,
+    sectionId: filterSectionId,
+    q: filterQ,
+  };
+  const hasActiveFilter = !!(filterStatus || filterScope || filterType || filterSectionId || filterQ);
+
   const requestedPage = parsePageParam(sp.page);
-  const totalInterventions = await getInterventionsCountForYear(sy.id);
+  const totalInterventions = await getInterventionsCountForYear(sy.id, filters);
   const pagination = paginate(totalInterventions, requestedPage, PAGE_SIZE);
 
-  const [interventions, recommendations, outcomes] = await Promise.all([
-    getInterventionsForYear(sy.id, { skip: pagination.skip, take: pagination.take }),
+  // Fetch sections for the section filter dropdowns (always needed).
+  const [interventions, allRecommendations, outcomes, allSections] = await Promise.all([
+    getInterventionsForYear(sy.id, { skip: pagination.skip, take: pagination.take, filters }),
     getOpenRecommendations(sy.id),
     getOutcomeTracking(sy.id),
+    prisma.section.findMany({
+      where: { schoolYearId: sy.id },
+      select: { id: true, gradeLevel: true, name: true },
+      orderBy: [{ gradeLevel: "asc" }, { name: "asc" }],
+    }),
   ]);
+
+  // ── Filter recommendations by section ─────────────────────────────────────
+  // If recSection is set, keep:
+  //   • SECTION-scope recs targeting that section
+  //   • STUDENT-scope recs whose target is enrolled in that section
+  //   • GRADE / SCHOOL recs (school-wide, always relevant)
+  let recommendations = allRecommendations;
+  if (filterRecSectionId) {
+    const sectionEnrollments = await prisma.studentEnrollment.findMany({
+      where: { sectionId: filterRecSectionId, schoolYearId: sy.id, status: "ACTIVE" },
+      select: { studentId: true },
+    });
+    const enrolledStudentIds = new Set(sectionEnrollments.map((e) => e.studentId));
+    recommendations = allRecommendations.filter((r) => {
+      if (r.scope === "SECTION") return r.scopeTargetId === filterRecSectionId;
+      if (r.scope === "STUDENT") return enrolledStudentIds.has(r.scopeTargetId);
+      return true; // GRADE / SCHOOL — always shown
+    });
+  }
 
   // Resolve scope labels for recommendations + fire narrative generators in
   // parallel. The wrapper caches by content hash so subsequent renders skip
@@ -103,73 +179,155 @@ export default async function CounselorInterventionsPage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="flex flex-col gap-8">
+
+      {/* ── Page header ─────────────────────────────────────────────── */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Intervention Builder</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            {totalInterventions.toLocaleString()} intervention{totalInterventions === 1 ? "" : "s"} in {sy.label}. Individual scope activates on save; section, grade, and school-wide scopes go to the principal for approval.
+          <h1 className="text-2xl font-bold text-slate-900">Intervention Builder</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {sy.label} ·{" "}
+            {totalInterventions.toLocaleString()} intervention{totalInterventions === 1 ? "" : "s"} total.{" "}
+            Individual scope activates on save; wider scopes go to the principal for approval.
           </p>
         </div>
         <Link
           href="/counselor/interventions/new"
-          className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-800"
+          className="rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-700 transition-colors"
         >
           + New intervention
         </Link>
       </header>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <header>
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Open recommendations
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Algorithmic drafts surfaced from pattern detection. Drafts that you open in the builder are marked INSTANTIATED on save.
-          </p>
-        </header>
+      {/* ── Open recommendations ──────────────────────────────────────── */}
+      <section>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Open recommendations</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Algorithmic drafts from pattern detection. Opening one in the builder marks it INSTANTIATED on save.
+            </p>
+          </div>
+
+          {/* Section filter for recommendations */}
+          <form method="GET" className="flex items-center gap-2">
+            {/* Preserve all other query params */}
+            {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
+            {filterScope && <input type="hidden" name="scope" value={filterScope} />}
+            {filterType && <input type="hidden" name="type" value={filterType} />}
+            {filterSectionId && <input type="hidden" name="section" value={filterSectionId} />}
+            {filterQ && <input type="hidden" name="q" value={filterQ} />}
+            <label className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 whitespace-nowrap">
+                Section
+              </span>
+              <select
+                name="recSection"
+                defaultValue={filterRecSectionId ?? ""}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                <option value="">All sections</option>
+                {allSections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.gradeLevel} · {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Filter
+            </button>
+            {filterRecSectionId && (
+              <Link
+                href={`/counselor/interventions${(() => {
+                  const p = new URLSearchParams();
+                  if (filterStatus) p.set("status", filterStatus);
+                  if (filterScope) p.set("scope", filterScope);
+                  if (filterType) p.set("type", filterType);
+                  if (filterSectionId) p.set("section", filterSectionId);
+                  if (filterQ) p.set("q", filterQ);
+                  const qs = p.toString();
+                  return qs ? `?${qs}` : "";
+                })()}`}
+                className="text-[11px] font-medium text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap"
+              >
+                Clear
+              </Link>
+            )}
+            {allRecommendations.length > 0 && (
+              <span className="ml-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 whitespace-nowrap">
+                {recommendations.length}{filterRecSectionId ? ` / ${allRecommendations.length}` : ""} open
+              </span>
+            )}
+          </form>
+        </div>
 
         {recommendations.length === 0 ? (
-          <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400">
-            No open recommendations. Run the risk engine to surface new drafts.
-          </p>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-400">
+            {filterRecSectionId
+              ? "No open recommendations for this section. Try a different section or clear the filter."
+              : "No open recommendations. Run the risk engine to surface new drafts."}
+          </div>
         ) : (
-          <ul className="mt-4 divide-y divide-slate-100">
+          <ul className="flex flex-col gap-4">
             {recommendations.map((r, i) => {
               const narrative = recommendationNarratives[i];
+              const scopeTarget =
+                labelMap.get(`${r.scope}:${r.scopeTargetId}`) ??
+                (r.scope === "SCHOOL" ? "School-wide" : r.scopeTargetId);
               return (
-                <li key={r.id} className="flex flex-col gap-3 py-3">
+                <li key={r.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  {/* Card header row */}
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        {SCOPE_LABEL[r.scope] ?? r.scope} · {r.suggestedType.replace(/_/g, " ")}
-                        {r.triggeringRuleId && (
-                          <span className="ml-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                            {r.triggeringRuleId.replace(/_/g, " ")}
-                          </span>
-                        )}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-700">{r.rationale}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                        {SCOPE_LABEL[r.scope] ?? r.scope}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                        {r.suggestedType.replace(/_/g, " ")}
+                      </span>
+                      {r.triggeringRuleId && (
+                        <span className="rounded-full border border-slate-200 px-2.5 py-0.5 text-[10px] font-medium text-slate-400">
+                          rule: {r.triggeringRuleId.replace(/_/g, " ")}
+                        </span>
+                      )}
                     </div>
                     <Link
                       href={`/counselor/interventions/new?fromRecommendation=${r.id}`}
-                      className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50"
+                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      Open in Builder
+                      Open in builder →
                     </Link>
                   </div>
-                  {narrative.ok ? (
-                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-                        AI narrative {narrative.cached ? "(cached)" : ""}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-sky-900">{narrative.text}</p>
-                    </div>
-                  ) : (
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                      {fallbackMessage(narrative.reason)}
+
+                  {/* Scope target */}
+                  {scopeTarget && (
+                    <p className="mt-2 text-xs font-medium text-slate-500">
+                      Target: <span className="text-slate-700">{scopeTarget}</span>
                     </p>
                   )}
+
+                  {/* Rationale */}
+                  <p className="mt-3 text-sm leading-relaxed text-slate-700">{r.rationale}</p>
+
+                  {/* AI narrative — visually contained below rationale */}
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    {narrative.ok ? (
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-600">
+                          ✦ AI insight{narrative.cached ? " (cached)" : ""}
+                        </p>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+                          {narrative.text}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">{fallbackMessage(narrative.reason)}</p>
+                    )}
+                  </div>
                 </li>
               );
             })}
@@ -177,121 +335,241 @@ export default async function CounselorInterventionsPage({
         )}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <header>
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Outcome tracking
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Participation outcomes from completed plans. Feeds the interventionHistory sub-score on the next risk recompute.
-          </p>
-        </header>
-        {outcomes.length === 0 ? (
-          <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400">
-            No completed interventions yet. Outcomes populate when a counselor marks a plan complete.
-          </p>
-        ) : (
-          <ul className="mt-4 flex flex-col gap-3">
+      {/* ── Outcome tracking ─────────────────────────────────────────── */}
+      {outcomes.length > 0 && (
+        <section>
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-slate-900">Outcome tracking</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Participation outcomes from completed plans. Feeds the intervention history sub-score on the next risk recompute.
+            </p>
+          </div>
+          <ul className="flex flex-col gap-3">
             {outcomes.map((o) => {
               const total = o.total || 1;
               return (
-                <li key={o.interventionId} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <Link
-                      href={`/counselor/interventions/${o.interventionId}`}
-                      className="text-sm font-medium text-slate-900 hover:text-amber-700"
-                    >
-                      {o.scopeLabel}
-                    </Link>
-                    <p className="text-[11px] text-slate-500">
-                      {SCOPE_LABEL[o.scope] ?? o.scope} · {o.type.replace(/_/g, " ")}
-                      {o.endDate ? ` · ended ${o.endDate}` : ""}
-                    </p>
+                <li key={o.interventionId} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <Link
+                        href={`/counselor/interventions/${o.interventionId}`}
+                        className="text-sm font-semibold text-slate-900 hover:text-amber-700"
+                      >
+                        {o.scopeLabel}
+                      </Link>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {SCOPE_LABEL[o.scope] ?? o.scope} · {o.type.replace(/_/g, " ")}
+                        {o.endDate ? ` · ended ${o.endDate}` : ""}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] text-slate-500">
+                      {o.total} participant{o.total === 1 ? "" : "s"}
+                    </span>
                   </div>
-                  <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <span className="bg-emerald-500" style={{ width: `${(o.improving / total) * 100}%` }} title={`Improving ${o.improving}`} />
-                    <span className="bg-emerald-300" style={{ width: `${(o.completed / total) * 100}%` }} title={`Completed ${o.completed}`} />
-                    <span className="bg-slate-300" style={{ width: `${(o.stable / total) * 100}%` }} title={`Stable ${o.stable}`} />
-                    <span className="bg-rose-500" style={{ width: `${(o.declining / total) * 100}%` }} title={`Declining ${o.declining}`} />
-                    <span className="bg-slate-100" style={{ width: `${(o.unset / total) * 100}%` }} title={`Unset ${o.unset}`} />
+
+                  {/* Progress bar */}
+                  <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                    <span className="bg-emerald-500 transition-all" style={{ width: `${(o.improving / total) * 100}%` }} title={`Improving ${o.improving}`} />
+                    <span className="bg-emerald-300 transition-all" style={{ width: `${(o.completed / total) * 100}%` }} title={`Completed ${o.completed}`} />
+                    <span className="bg-slate-300 transition-all" style={{ width: `${(o.stable / total) * 100}%` }} title={`Stable ${o.stable}`} />
+                    <span className="bg-rose-400 transition-all" style={{ width: `${(o.declining / total) * 100}%` }} title={`Declining ${o.declining}`} />
+                    <span className="bg-slate-100 transition-all" style={{ width: `${(o.unset / total) * 100}%` }} title={`Unset ${o.unset}`} />
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {o.total} participant{o.total === 1 ? "" : "s"} ·
-                    <span className="ml-1 text-emerald-700">IMPROVING {o.improving}</span> ·
-                    <span className="ml-1 text-emerald-600">COMPLETED {o.completed}</span> ·
-                    <span className="ml-1 text-slate-600">STABLE {o.stable}</span> ·
-                    <span className="ml-1 text-rose-700">DECLINING {o.declining}</span>
-                    {o.unset > 0 && <span className="ml-1 text-slate-400">UNSET {o.unset}</span>}
-                  </p>
+
+                  {/* Legend */}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500 inline-block" />Improving {o.improving}</span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-300 inline-block" />Completed {o.completed}</span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-slate-300 inline-block" />Stable {o.stable}</span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-rose-400 inline-block" />Declining {o.declining}</span>
+                    {o.unset > 0 && <span className="flex items-center gap-1.5 text-slate-400"><span className="size-2 rounded-full bg-slate-100 border border-slate-300 inline-block" />Unset {o.unset}</span>}
+                  </div>
                 </li>
               );
             })}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <header>
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Interventions
-          </h2>
-        </header>
+      {/* ── Interventions list ───────────────────────────────────────── */}
+      <section>
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">All interventions</h2>
+          </div>
+          {totalInterventions > 0 && (
+            <span className="shrink-0 text-xs text-slate-400">
+              {totalInterventions.toLocaleString()} {hasActiveFilter ? "matching" : "total"}
+            </span>
+          )}
+        </div>
+
+        {/* Filter bar */}
+        <form
+          method="GET"
+          className="mb-4 rounded-2xl border border-slate-200 bg-white p-4"
+        >
+          {/* Text search */}
+          <div className="mb-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Search</span>
+              <input
+                type="search"
+                name="q"
+                defaultValue={filterQ ?? ""}
+                placeholder="Student name or section…"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* Section */}
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Section</span>
+              <select
+                name="section"
+                defaultValue={filterSectionId ?? ""}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                <option value="">All sections</option>
+                {allSections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.gradeLevel} · {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Status */}
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Status</span>
+              <select
+                name="status"
+                defaultValue={filterStatus ?? ""}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                <option value="">All statuses</option>
+                {INTERVENTION_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Scope */}
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Scope</span>
+              <select
+                name="scope"
+                defaultValue={filterScope ?? ""}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                <option value="">All scopes</option>
+                {SCOPE_VALUES.map((s) => (
+                  <option key={s} value={s}>
+                    {SCOPE_LABEL[s] ?? s}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Type */}
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Type</span>
+              <select
+                name="type"
+                defaultValue={filterType ?? ""}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              >
+                <option value="">All types</option>
+                {INTERVENTION_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {/* Actions row */}
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white hover:bg-slate-700 transition-colors"
+            >
+              Apply
+            </button>
+            {hasActiveFilter && (
+              <Link
+                href="/counselor/interventions"
+                className="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
+              >
+                Clear filters
+              </Link>
+            )}
+          </div>
+        </form>
 
         {interventions.length === 0 ? (
-          <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400">
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-400">
             No interventions created yet. Use the button above or open a recommendation to start.
-          </p>
+          </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Target</th>
-                  <th className="px-3 py-2 font-medium">Scope</th>
-                  <th className="px-3 py-2 font-medium">Type</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Dates</th>
-                  <th className="px-3 py-2 font-medium">Owner</th>
-                </tr>
-              </thead>
-              <tbody>
-                {interventions.map((i) => (
-                  <tr key={i.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/counselor/interventions/${i.id}`}
-                        className="font-medium text-slate-900 hover:text-amber-700"
-                      >
-                        {i.scopeLabel}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{SCOPE_LABEL[i.scope] ?? i.scope}</td>
-                    <td className="px-3 py-2 text-slate-600">{i.type.replace(/_/g, " ")}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] ${
-                          STATUS_TONE[i.status] ?? "border-slate-200 bg-slate-50 text-slate-600"
-                        }`}
-                      >
-                        {i.status.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-slate-500">
-                      {i.startDate}
-                      {i.endDate ? ` → ${i.endDate}` : ""}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{i.ownerName}</td>
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Target</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Scope</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Type</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Dates</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Owner</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-3">
-              <PaginationBar
-                pagination={pagination}
-                basePath="/counselor/interventions"
-                forwardParams={{}}
-              />
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {interventions.map((i) => (
+                    <tr key={i.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <Link
+                          href={`/counselor/interventions/${i.id}`}
+                          className="font-semibold text-slate-900 hover:text-amber-700 transition-colors"
+                        >
+                          {i.scopeLabel}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-500 text-xs">{SCOPE_LABEL[i.scope] ?? i.scope}</td>
+                      <td className="px-4 py-3.5 text-slate-600 text-xs capitalize">{i.type.replace(/_/g, " ").toLowerCase()}</td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${
+                            STATUS_TONE[i.status] ?? "border-slate-200 bg-slate-50 text-slate-600"
+                          }`}
+                        >
+                          {i.status.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-slate-400 whitespace-nowrap">
+                        {i.startDate}
+                        {i.endDate ? <><br /><span className="text-slate-300">→</span> {i.endDate}</> : ""}
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-600 text-sm">{i.ownerName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            {pagination.totalPages > 1 && (
+              <div className="border-t border-slate-100 px-5 py-3">
+                <PaginationBar
+                  pagination={pagination}
+                  basePath="/counselor/interventions"
+                  forwardParams={{}}
+                />
+              </div>
+            )}
           </div>
         )}
       </section>

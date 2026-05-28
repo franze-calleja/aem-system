@@ -7,6 +7,7 @@ import type {
   InterventionStatus,
   InterventionType,
   PatternScope,
+  Prisma,
   Role,
 } from "@prisma/client";
 
@@ -26,12 +27,78 @@ export type InterventionListRow = {
   triggeringRecommendationId: string | null;
 };
 
+export type InterventionFilters = {
+  status?: InterventionStatus;
+  scope?: PatternScope;
+  type?: InterventionType;
+  /** Filter by section ID — matches SECTION-scope rows directly and
+   *  STUDENT-scope rows whose target is enrolled in that section. */
+  sectionId?: string;
+  /** Free-text search on student name (first/last) or section name. */
+  q?: string;
+};
+
+async function buildInterventionWhere(
+  schoolYearId: string,
+  filters: InterventionFilters,
+): Promise<Prisma.InterventionWhereInput> {
+  const conditions: Prisma.InterventionWhereInput[] = [{ schoolYearId }];
+
+  if (filters.status) conditions.push({ status: filters.status });
+  if (filters.scope) conditions.push({ scope: filters.scope });
+  if (filters.type) conditions.push({ type: filters.type });
+
+  if (filters.sectionId) {
+    const enrollments = await prisma.studentEnrollment.findMany({
+      where: { sectionId: filters.sectionId, schoolYearId, status: "ACTIVE" },
+      select: { studentId: true },
+    });
+    const studentIds = enrollments.map((e) => e.studentId);
+    conditions.push({
+      OR: [
+        { scope: "SECTION", scopeTargetId: filters.sectionId },
+        ...(studentIds.length > 0
+          ? [{ scope: "STUDENT" as PatternScope, scopeTargetId: { in: studentIds } }]
+          : []),
+      ],
+    });
+  }
+
+  if (filters.q) {
+    const q = filters.q.trim();
+    const [matchingStudents, matchingSections] = await Promise.all([
+      prisma.student.findMany({
+        where: {
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      }),
+      prisma.section.findMany({
+        where: { schoolYearId, name: { contains: q, mode: "insensitive" } },
+        select: { id: true },
+      }),
+    ]);
+    const studentIds = matchingStudents.map((s) => s.id);
+    const sectionIds = matchingSections.map((s) => s.id);
+    const qOR: Prisma.InterventionWhereInput[] = [];
+    if (studentIds.length > 0) qOR.push({ scope: "STUDENT", scopeTargetId: { in: studentIds } });
+    if (sectionIds.length > 0) qOR.push({ scope: "SECTION", scopeTargetId: { in: sectionIds } });
+    conditions.push(qOR.length > 0 ? { OR: qOR } : { id: "__no_match__" });
+  }
+
+  return conditions.length === 1 ? conditions[0] : { AND: conditions };
+}
+
 export async function getInterventionsForYear(
   schoolYearId: string,
-  opts?: { skip?: number; take?: number },
+  opts?: { skip?: number; take?: number; filters?: InterventionFilters },
 ): Promise<InterventionListRow[]> {
+  const where = await buildInterventionWhere(schoolYearId, opts?.filters ?? {});
   const rows = await prisma.intervention.findMany({
-    where: { schoolYearId },
+    where,
     include: { owner: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
     skip: opts?.skip,
@@ -55,8 +122,12 @@ export async function getInterventionsForYear(
   }));
 }
 
-export async function getInterventionsCountForYear(schoolYearId: string): Promise<number> {
-  return prisma.intervention.count({ where: { schoolYearId } });
+export async function getInterventionsCountForYear(
+  schoolYearId: string,
+  filters?: InterventionFilters,
+): Promise<number> {
+  const where = await buildInterventionWhere(schoolYearId, filters ?? {});
+  return prisma.intervention.count({ where });
 }
 
 async function resolveScopeLabels(

@@ -61,37 +61,25 @@ export default function InterventionBuilderForm({ targets, prefill }: Props) {
     switch (scope) {
       case "STUDENT":
         return (
-          <select
+          <SearchableSelect
+            key={`student-${scope}`}
+            options={targets.students.map((s) => ({ id: s.id, label: `${s.label} — ${s.sectionLabel}` }))}
             value={scopeTargetId}
-            onChange={(e) => setScopeTargetId(e.target.value)}
+            onChange={setScopeTargetId}
+            placeholder="Search student by name or section…"
             disabled={pending}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-            required
-          >
-            <option value="">Select a student…</option>
-            {targets.students.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label} — {s.sectionLabel}
-              </option>
-            ))}
-          </select>
+          />
         );
       case "SECTION":
         return (
-          <select
+          <SearchableSelect
+            key={`section-${scope}`}
+            options={targets.sections.map((s) => ({ id: s.id, label: s.label }))}
             value={scopeTargetId}
-            onChange={(e) => setScopeTargetId(e.target.value)}
+            onChange={setScopeTargetId}
+            placeholder="Search section…"
             disabled={pending}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-            required
-          >
-            <option value="">Select a section…</option>
-            {targets.sections.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          />
         );
       case "GRADE":
         return (
@@ -373,6 +361,73 @@ function TextAreaField({
         rows={minRows}
         className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-white p-2 text-sm placeholder:text-slate-400 disabled:bg-slate-50"
       />
+    </div>
+  );
+}
+
+// ── Searchable combobox ────────────────────────────────────────────────────
+
+function SearchableSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  options: { id: string; label: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const selected = options.find((o) => o.id === value);
+
+  const filtered = query
+    ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <div className="relative mt-1">
+      <input
+        type="text"
+        value={open ? query : (selected?.label ?? "")}
+        placeholder={placeholder}
+        disabled={disabled}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (value) onChange(""); // clear selection when user starts typing
+        }}
+        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-slate-50"
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-slate-400">No matches</li>
+          ) : (
+            filtered.map((o) => (
+              <li
+                key={o.id}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // keep input focused so blur doesn't fire
+                  onChange(o.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className={`cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 ${
+                  o.id === value ? "bg-slate-50 font-semibold" : ""
+                }`}
+              >
+                {o.label}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
     </div>
   );
 }
