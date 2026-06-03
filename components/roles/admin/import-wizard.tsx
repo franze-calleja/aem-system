@@ -96,6 +96,11 @@ export default function ImportWizard({ years, defaultYearId }: Props) {
                   </p>
                 </>
               }
+              sampleFileName="roster-sample.csv"
+              sampleRows={[
+                { lrn: "136800010001", firstName: "Maria", lastName: "Santos", middleName: "Dela Cruz", sex: "FEMALE", birthDate: "2010-04-12", gradeLevel: "9", section: "9-Newton", learningModality: "FACE_TO_FACE", spedStatus: "NONE" },
+                { lrn: "136800010002", firstName: "Juan", lastName: "Reyes", middleName: "", sex: "MALE", birthDate: "07/30/2010", gradeLevel: "9", section: "9-Curie", learningModality: "MODULAR", spedStatus: "IEP" },
+              ]}
               previewAction={previewRosterAction}
               commitAction={commitRosterAction}
               previewHeaders={["Row", "LRN", "Name", "Sex", "Birth", "Grade · Section", "Modality", "SPED"]}
@@ -137,6 +142,11 @@ export default function ImportWizard({ years, defaultYearId }: Props) {
                   <p>LRN must already be enrolled in the target year and subject code must exist for that year.</p>
                 </>
               }
+              sampleFileName="grades-sample.csv"
+              sampleRows={[
+                { lrn: "100000000001", subjectCode: "MATH9", quarter: "1", score: "88", maxScore: "100", assessmentKind: "REGULAR", label: "Quarterly Grade" },
+                { lrn: "100000000001", subjectCode: "SCI9", quarter: "1", score: "15", maxScore: "20", assessmentKind: "QUIZ", label: "Quiz 1" },
+              ]}
               previewAction={previewGradesAction}
               commitAction={commitGradesAction}
               previewHeaders={["Row", "LRN", "Subject", "Q", "Score", "Kind", "Label"]}
@@ -173,6 +183,11 @@ export default function ImportWizard({ years, defaultYearId }: Props) {
                   <p>Existing records for the same (student, date) are updated, not duplicated. Monthly chunks are fine.</p>
                 </>
               }
+              sampleFileName="attendance-sample.csv"
+              sampleRows={[
+                { lrn: "100000000001", date: "2025-08-15", status: "PRESENT", notes: "" },
+                { lrn: "100000000001", date: "08/16/2025", status: "ABSENT", notes: "Sick" },
+              ]}
               previewAction={previewAttendanceAction}
               commitAction={commitAttendanceAction}
               previewHeaders={["Row", "LRN", "Date", "Status", "Notes"]}
@@ -209,6 +224,11 @@ export default function ImportWizard({ years, defaultYearId }: Props) {
                   <p>Each row creates a new incident — there is no upsert key.</p>
                 </>
               }
+              sampleFileName="behavioral-sample.csv"
+              sampleRows={[
+                { lrn: "100000000001", date: "2025-08-20", category: "ACADEMIC", severity: "LOW", description: "Missed two homework submissions" },
+                { lrn: "100000000001", date: "2025-08-22", category: "BEHAVIORAL", severity: "MODERATE", description: "Disruptive during class discussion" },
+              ]}
               previewAction={previewBehavioralAction}
               commitAction={commitBehavioralAction}
               previewHeaders={["Row", "LRN", "Date", "Category", "Severity", "Description"]}
@@ -310,6 +330,8 @@ function CsvStep<T, C extends CommitShape>({
   requiredColumns,
   optionalColumns,
   hints,
+  sampleRows,
+  sampleFileName,
   previewAction,
   commitAction,
   previewHeaders,
@@ -324,6 +346,8 @@ function CsvStep<T, C extends CommitShape>({
   requiredColumns: string[];
   optionalColumns?: string[];
   hints?: ReactNode;
+  sampleRows: Record<string, string>[];
+  sampleFileName: string;
   previewAction: (fd: FormData) => Promise<PreviewShape<T>>;
   commitAction: (fd: FormData) => Promise<C>;
   previewHeaders: string[];
@@ -415,6 +439,18 @@ function CsvStep<T, C extends CommitShape>({
           </>
         )}
         {hints && <div className="mt-2 text-slate-500 space-y-1">{hints}</div>}
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() =>
+              downloadCsv(sampleFileName, toCsv([...requiredColumns, ...(optionalColumns ?? [])], sampleRows))
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            <span aria-hidden>↓</span> Download sample CSV
+          </button>
+          <span className="ml-2 text-[11px] text-slate-400">Pre-filled example rows you can edit and re-upload.</span>
+        </div>
       </div>
 
       <div className="mt-4">
@@ -524,6 +560,29 @@ function CsvStep<T, C extends CommitShape>({
       )}
     </section>
   );
+}
+
+// ─── Sample CSV helpers ─────────────────────────────────────────────────────
+
+/** Serialize rows to CSV text in the given column order, with RFC-4180 escaping. */
+function toCsv(columns: string[], rows: Record<string, string>[]): string {
+  const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const lines = [columns.map(esc).join(",")];
+  for (const r of rows) lines.push(columns.map((c) => esc(r[c] ?? "")).join(","));
+  return lines.join("\n");
+}
+
+/** Trigger a client-side download of CSV text as a file. */
+function downloadCsv(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok" | "warn" | "muted" }) {

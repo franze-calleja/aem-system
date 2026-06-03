@@ -210,6 +210,9 @@ A living checklist for building the AEM system. Mirrors the spec's 7-week roadma
 - [x] Maria's profile (LRN 100000000001) now has real data: 2 Math grades showing decline (85→72), 1 Science grade, full week of attendance, 2 behavioral incidents — exactly matches Scene 1 of the reference scenario
 - [x] Typecheck clean for all Phase 2b code
 
+### Phase 2b enhancements
+- [x] **Downloadable sample CSVs** (added 2026-06-02) — each `<CsvStep>` renders a "Download sample CSV" button that generates a pre-filled, schema-correct template client-side (header row in `[required, optional]` order + 2 example rows with valid enum values and accepted date formats). No new dependency or route; uses a `Blob` download. Grades/Attendance/Behavioral samples reference Maria Santos' seed LRN (`100000000001`) so they commit directly against seed data; the roster sample uses fictional LRNs since that step creates students.
+
 ### Phase 2b retrospective
 - **Generic `<CsvStep>` was the right call.** Considered 4 separate copy-pasted step components. The generic version covers all 4 with one ~280-line component plus 4 ~50-line configuration instances. Future CSV steps (e.g. SEL assessment imports in Phase 3) drop in as another `<CsvStep>` instance.
 - **Three-line schema, four-step pipeline.** The `Grade`, `Attendance`, `BehavioralRecord` models from Phase 2a's migration are now driven entirely by the wizard — no manual seed code needed for these tables.
