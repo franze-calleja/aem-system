@@ -145,3 +145,92 @@ export async function getSectionBehavioralRecords(sectionId: string, schoolYearI
     orderBy: { date: "desc" },
   });
 }
+
+export type ReferableStudent = { id: string; label: string; sectionLabel: string };
+
+/**
+ * Distinct sectionIds the teacher teaches or advises in the given year.
+ */
+async function teacherSectionIds(userId: string, schoolYearId: string): Promise<string[]> {
+  const rows = await prisma.teacherAssignment.findMany({
+    where: { userId, schoolYearId },
+    select: { sectionId: true },
+  });
+  return Array.from(new Set(rows.map((r) => r.sectionId)));
+}
+
+/** Students enrolled in any section the teacher teaches/advises this year. */
+export async function getReferableStudents(
+  userId: string,
+  schoolYearId: string,
+): Promise<ReferableStudent[]> {
+  const sectionIds = await teacherSectionIds(userId, schoolYearId);
+  if (sectionIds.length === 0) return [];
+  const enrollments = await prisma.studentEnrollment.findMany({
+    where: { schoolYearId, status: "ACTIVE", sectionId: { in: sectionIds } },
+    include: {
+      student: { select: { id: true, lastName: true, firstName: true, lrn: true } },
+      section: { select: { gradeLevel: true, name: true } },
+    },
+    orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
+  });
+  // Dedupe by student (a student could appear via multiple assignments).
+  const seen = new Set<string>();
+  const out: ReferableStudent[] = [];
+  for (const e of enrollments) {
+    if (seen.has(e.student.id)) continue;
+    seen.add(e.student.id);
+    out.push({
+      id: e.student.id,
+      label: `${e.student.lastName}, ${e.student.firstName} · ${e.student.lrn}`,
+      sectionLabel: `${e.section.gradeLevel} · ${e.section.name}`,
+    });
+  }
+  return out;
+}
+
+/** Authoritative scope guard for the create action. */
+export async function canTeacherReferStudent(
+  userId: string,
+  studentId: string,
+  schoolYearId: string,
+): Promise<boolean> {
+  const sectionIds = await teacherSectionIds(userId, schoolYearId);
+  if (sectionIds.length === 0) return false;
+  const count = await prisma.studentEnrollment.count({
+    where: { schoolYearId, studentId, status: "ACTIVE", sectionId: { in: sectionIds } },
+  });
+  return count > 0;
+}
+
+export type TeacherReferralRow = {
+  id: string;
+  studentLabel: string;
+  suggestedType: string;
+  urgency: string;
+  status: string;
+  declineReason: string | null;
+  resultingInterventionId: string | null;
+  createdAt: Date;
+};
+
+export async function getTeacherReferrals(
+  userId: string,
+  schoolYearId: string,
+): Promise<TeacherReferralRow[]> {
+  const rows = await prisma.interventionReferral.findMany({
+    where: { referredById: userId, schoolYearId },
+    include: { student: { select: { firstName: true, lastName: true, lrn: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    studentLabel: `${r.student.lastName}, ${r.student.firstName} · ${r.student.lrn}`,
+    suggestedType: r.suggestedType,
+    urgency: r.urgency,
+    status: r.status,
+    declineReason: r.declineReason,
+    resultingInterventionId: r.resultingInterventionId,
+    createdAt: r.createdAt,
+  }));
+}
