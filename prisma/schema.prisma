@@ -150,7 +150,22 @@ enum AuditAction {
   INTERVENTION_APPROVED
   INTERVENTION_REVISED
   INTERIM_REVISION
+  REFERRAL_CREATED
+  REFERRAL_ACCEPTED
+  REFERRAL_DECLINED
   YEAR_SWITCHED
+}
+
+enum ReferralStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum ReferralUrgency {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 enum InterventionStatus {
@@ -214,6 +229,7 @@ model User {
   interventionNotes     InterventionNote[]
   interventionRevisions InterventionRevision[]
   riskOverrides         RiskOverride[]
+  referralsAuthored     InterventionReferral[] @relation("ReferralAuthor")
 
   @@index([role])
 }
@@ -232,6 +248,7 @@ model SchoolYear {
   enrollments        StudentEnrollment[]
   teacherAssignments TeacherAssignment[]
   interventions      Intervention[]
+  referrals          InterventionReferral[]
 
   @@index([isActive])
 }
@@ -303,6 +320,7 @@ model Student {
   enrollments       StudentEnrollment[]
   consentRecords    ConsentRecord[]
   spedStatusHistory SpedStatusChange[]
+  referrals         InterventionReferral[]
 
   @@index([lastName, firstName])
 }
@@ -546,6 +564,38 @@ model RecommendationDraft {
   @@index([schoolYearId, status])
 }
 
+// Teacher-originated referral: a structured proposal a counselor converts into
+// a real intervention. STUDENT scope only. Mirrors RecommendationDraft but is
+// human-originated — kept separate to preserve algorithm-vs-human provenance.
+model InterventionReferral {
+  id            String          @id @default(cuid())
+  referredById  String
+  referredBy    User            @relation("ReferralAuthor", fields: [referredById], references: [id], onDelete: Restrict)
+  studentId     String
+  student       Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  schoolYearId  String
+  schoolYear    SchoolYear      @relation(fields: [schoolYearId], references: [id], onDelete: Cascade)
+
+  suggestedType InterventionType
+  rationale     String
+  urgency       ReferralUrgency @default(MEDIUM)
+
+  status        ReferralStatus  @default(PENDING)
+  declineReason String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+
+  resultingInterventionId String?       @unique
+  resultingIntervention   Intervention? @relation("ReferralResult", fields: [resultingInterventionId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([schoolYearId, status])
+  @@index([referredById])
+  @@index([studentId])
+}
+
 // ─── Phase 3: Counseling & Intervention ─────────────────────────────────────
 
 // Free-form counseling notes attached to a student's enrollment.
@@ -591,6 +641,7 @@ model Intervention {
   participations InterventionParticipation[]
   notes          InterventionNote[]
   revisions      InterventionRevision[]
+  referralResult InterventionReferral? @relation("ReferralResult")
 
   @@index([scope, scopeTargetId])
   @@index([schoolYearId, status])
