@@ -845,6 +845,21 @@ Counselors, principals, teachers, and admin couldn't find specific students exce
 
 ---
 
+### 7.10 Teacher intervention referral *(✅ 2026-06-17)*
+Teachers could see at-risk students daily but had no path to initiate an intervention — only counselors create interventions (spec §3/§6.6, single-owner governance). This adds a **referral** flow: a teacher proposes an intervention for a student in their sections; a counselor reviews and either accepts (converting it into a counselor-owned intervention) or declines with a reason. Teacher initiates; counselor decides and owns — governance model unchanged.
+
+**Model** — `InterventionReferral` (STUDENT scope only), mirroring the algorithm-originated `RecommendationDraft → Intervention` conversion path but human-originated (kept separate to preserve algorithm-vs-human provenance). Link to the resulting intervention is a single FK `resultingInterventionId`. New enums `ReferralStatus`/`ReferralUrgency`; audit actions `REFERRAL_CREATED`/`REFERRAL_ACCEPTED`/`REFERRAL_DECLINED`. Migration `add_intervention_referral`.
+
+**Teacher side** — `/teacher/refer`: scope-guarded student picker (only the teacher's taught/advised sections), suggested type + rationale + urgency, plus a status list (PENDING / ACCEPTED-with-link / DECLINED-with-reason). Action `createReferralAction` enforces the scope guard server-side (`canTeacherReferStudent`), not just in the UI.
+
+**Counselor side** — `/counselor/referrals`: pending queue ordered by urgency. **Accept** pre-fills the existing intervention builder via `?fromReferral=<id>` (source-aware `RecommendationPrefill`), and `createInterventionAction` (extended with optional `triggeringReferralId`) flips the referral to ACCEPTED + links it inside the same transaction. **Decline** (`declineReferralAction`) records a reason. The pre-existing recommendation-draft accept path is untouched and independent.
+
+**Verified:** `npx tsc --noEmit`, `npm run lint`, `npm run build` all clean across all tasks; `/teacher/refer` + `/counselor/referrals` registered (307 unauth). Data-layer end-to-end (real query helpers against demo data): scope guard allow+reject, PENDING create, teacher PENDING view, counselor queue, prefill shape (STUDENT/REFERRAL), accept linkage, decline-with-reason — all pass. Built via subagent-driven development (7 tasks, per-task spec+quality review). Design/plan: [docs/superpowers/specs/2026-06-17-teacher-intervention-referral-design.md](superpowers/specs/2026-06-17-teacher-intervention-referral-design.md), [docs/superpowers/plans/2026-06-17-teacher-intervention-referral.md](superpowers/plans/2026-06-17-teacher-intervention-referral.md).
+
+**Known follow-ups:** referrals are individual-student scope only (no section/grade/school referrals); no edit/withdraw of a submitted referral; the teacher status list links to `/teacher/intervention-feedback` generally rather than deep-linking the specific created intervention.
+
+---
+
 **Known follow-ups (intentionally deferred):**
 - Multi-instance Redis-backed rate limiter (one-line swap when we leave single-process)
 - The 12 unbounded `findMany` in [lib/intervention/queries.ts](../lib/intervention/queries.ts) — most are tightly filtered and used by detail pages (not lists), so the user-facing risk is small; revisit if any of them turn into general list endpoints
