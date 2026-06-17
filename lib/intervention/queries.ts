@@ -657,6 +657,7 @@ export type RecommendationPrefill = {
   suggestedType: string;
   rationale: string;
   scopeLabel: string;
+  source: "RECOMMENDATION" | "REFERRAL";
 };
 
 export async function getRecommendationForPrefill(
@@ -678,5 +679,26 @@ export async function getRecommendationForPrefill(
     suggestedType: r.suggestedType,
     rationale: r.rationale,
     scopeLabel: labelMap.get(`${r.scope}:${r.scopeTargetId}`) ?? r.scopeTargetId,
+    source: "RECOMMENDATION" as const,
+  };
+}
+
+export async function getReferralForPrefill(
+  id: string,
+  schoolYearId: string,
+): Promise<RecommendationPrefill | null> {
+  const r = await prisma.interventionReferral.findFirst({
+    where: { id, status: "PENDING", schoolYearId },
+    include: { student: { select: { firstName: true, lastName: true, lrn: true } } },
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    scope: "STUDENT",
+    scopeTargetId: r.studentId,
+    suggestedType: r.suggestedType,
+    rationale: r.rationale,
+    scopeLabel: `${r.student.lastName}, ${r.student.firstName} · ${r.student.lrn}`,
+    source: "REFERRAL",
   };
 }

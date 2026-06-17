@@ -40,6 +40,7 @@ const inputSchema = z.object({
   rationale: z.string().trim().min(1, "Rationale is required.").max(4000),
   counselingContext: z.string().trim().max(4000).optional().or(z.literal("")),
   triggeringRecommendationId: z.string().min(1).optional().or(z.literal("")),
+  triggeringReferralId: z.string().min(1).optional().or(z.literal("")),
 });
 
 export type CreateInterventionResult =
@@ -77,6 +78,19 @@ export async function createInterventionAction(
       return { ok: false, error: "Recommendation draft not found or already instantiated." };
     }
     draftToInstantiate = draft;
+  }
+
+  // Optional referral acceptance — validate it exists and is pending.
+  let referralToAccept: { id: string } | null = null;
+  if (data.triggeringReferralId) {
+    const referral = await prisma.interventionReferral.findFirst({
+      where: { id: data.triggeringReferralId, status: "PENDING", schoolYearId: sy.id },
+      select: { id: true },
+    });
+    if (!referral) {
+      return { ok: false, error: "Referral not found or already reviewed." };
+    }
+    referralToAccept = referral;
   }
 
   const status = data.scope === "STUDENT" ? "ACTIVE" : "PENDING_APPROVAL";
@@ -131,6 +145,18 @@ export async function createInterventionAction(
       });
     }
 
+    if (referralToAccept) {
+      await tx.interventionReferral.update({
+        where: { id: referralToAccept.id },
+        data: {
+          status: "ACCEPTED",
+          resultingInterventionId: created.id,
+          reviewedById: session.user.id,
+          reviewedAt: new Date(),
+        },
+      });
+    }
+
     return created;
   });
 
@@ -157,8 +183,19 @@ export async function createInterventionAction(
     });
   }
 
+  if (referralToAccept) {
+    await logAudit({
+      action: "REFERRAL_ACCEPTED",
+      userId: session.user.id,
+      resourceType: "InterventionReferral",
+      resourceId: referralToAccept.id,
+      metadata: { interventionId: intervention.id },
+    });
+  }
+
   revalidatePath("/counselor/interventions");
   revalidatePath(`/counselor/interventions/${intervention.id}`);
+  revalidatePath("/counselor/referrals");
   return { ok: true, interventionId: intervention.id };
 }
 
