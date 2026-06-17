@@ -1,14 +1,15 @@
-'use client';
+"use client";
 
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { loginAction } from "@/app/actions/auth";
 
-const MOCK_ACCOUNTS: Record<string, { password: string; role: string; name: string }> = {
-  "admin@school.edu":     { password: "admin123",     role: "admin",     name: "Admin" },
-  "teacher@school.edu":   { password: "teacher123",   role: "teacher",   name: "Teacher" },
-  "counselor@school.edu": { password: "counselor123", role: "counselor", name: "Counselor" },
-  "principal@school.edu": { password: "principal123", role: "principal", name: "Principal" },
-};
+const DEMO_ACCOUNTS = [
+  { email: "admin@school.edu", role: "Admin" },
+  { email: "teacher@school.edu", role: "Teacher" },
+  { email: "counselor@school.edu", role: "Counselor" },
+  { email: "principal@school.edu", role: "Principal" },
+];
 
 export default function LoginForm() {
   const router = useRouter();
@@ -17,18 +18,23 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setLoading(true);
 
-    const account = MOCK_ACCOUNTS[email.toLowerCase().trim()];
-    if (!account || account.password !== password) {
-      setError("Invalid email or password.");
+    const formData = new FormData();
+    formData.set("email", email);
+    formData.set("password", password);
+
+    const result = await loginAction(formData);
+    if (!result.ok) {
+      setError(result.error);
+      setLoading(false);
       return;
     }
-
-    setLoading(true);
-    router.push(`/${account.role}`);
+    router.push(result.redirectTo);
+    router.refresh();
   };
 
   return (
@@ -80,16 +86,20 @@ export default function LoginForm() {
       </button>
 
       <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 space-y-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Mock accounts</p>
-        {Object.entries(MOCK_ACCOUNTS).map(([e, a]) => (
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Demo accounts (seeded)</p>
+        {DEMO_ACCOUNTS.map((a) => (
           <button
-            key={e}
+            key={a.email}
             type="button"
-            onClick={() => { setEmail(e); setPassword(a.password); setError(null); }}
+            onClick={() => {
+              setEmail(a.email);
+              setPassword(`${a.role.toLowerCase()}123`);
+              setError(null);
+            }}
             className="flex w-full items-center justify-between rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
           >
-            <span className="font-medium">{a.name}</span>
-            <span className="text-slate-400">{e}</span>
+            <span className="font-medium">{a.role}</span>
+            <span className="text-slate-400">{a.email}</span>
           </button>
         ))}
       </div>

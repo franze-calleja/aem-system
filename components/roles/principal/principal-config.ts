@@ -1,0 +1,45 @@
+import type { NavSection, ThemeName } from "@/components/shell/role-shell";
+
+export const PRINCIPAL_BADGE = "Principal workspace";
+export const PRINCIPAL_TITLE = "Oversight and decision dashboard";
+export const PRINCIPAL_DESCRIPTION =
+  "Monitor school-wide patterns, validate high-impact decisions, and keep governance visible across the system.";
+export const PRINCIPAL_THEME: ThemeName = "rose";
+
+export const PRINCIPAL_NAV: NavSection[] = [
+  {
+    title: "Students",
+    href: "/principal/students",
+    description:
+      "Read-only oversight of all enrolled students — academic, attendance, and behavioral records (counseling note bodies remain private).",
+  },
+  {
+    title: "School dashboard",
+    href: "/principal/dashboard",
+    description:
+      "Review risk distribution across grade levels, sections, and learner groups with drill-down visibility. Includes bias monitoring and intervention pipeline counts.",
+  },
+  {
+    title: "Approval queue",
+    href: "/principal/approvals",
+    description:
+      "Approve broader-scope interventions, review significant revisions, and handle interim revisions when needed.",
+  },
+  {
+    title: "Cohort analysis",
+    href: "/principal/cohort-analysis",
+    description:
+      "Compare a grade level across school years — risk band distribution, intervention pipeline, completed-intervention outcomes, year-over-year drift. CSV export available.",
+  },
+  {
+    title: "Governance review",
+    description:
+      "Inspect audit history, outcome trends, and risk overrides with mandatory written accountability.",
+  },
+];
+
+export const PRINCIPAL_METRICS = [
+  { label: "Oversight level", value: "School-wide" },
+  { label: "Approval scope", value: "Broad interventions" },
+  { label: "Governance focus", value: "Bias and overrides" },
+];

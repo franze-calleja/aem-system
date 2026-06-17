@@ -1,0 +1,145 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requireRole } from "@/lib/session";
+import { getIntervention } from "@/lib/intervention/queries";
+import ApprovalActions from "@/components/principal/approval-actions";
+
+const STATUS_TONE: Record<string, string> = {
+  DRAFT: "border-slate-200 bg-slate-50 text-slate-600",
+  PENDING_APPROVAL: "border-amber-200 bg-amber-50 text-amber-700",
+  ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  COMPLETED: "border-sky-200 bg-sky-50 text-sky-700",
+  CANCELLED: "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+const SCOPE_LABEL: Record<string, string> = {
+  STUDENT: "Individual",
+  SECTION: "Section",
+  GRADE: "Grade level",
+  SCHOOL: "School-wide",
+};
+
+export default async function PrincipalInterventionDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const session = await requireRole("PRINCIPAL");
+  const { id } = await params;
+  const intervention = await getIntervention(id, session.user.role, session.user.id);
+  if (!intervention) notFound();
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Link
+        href="/principal/approvals"
+        className="inline-flex w-fit items-center text-xs font-medium text-slate-500 hover:text-slate-700"
+      >
+        ← Back to Approval queue
+      </Link>
+
+      <header className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {SCOPE_LABEL[intervention.scope] ?? intervention.scope} · {intervention.type.replace(/_/g, " ")}
+            </p>
+            <h1 className="mt-1 text-xl font-semibold text-slate-900">{intervention.scopeLabel}</h1>
+            <p className="mt-1 text-xs text-slate-500">
+              Owner: {intervention.ownerName} · {intervention.startDate}
+              {intervention.endDate ? ` → ${intervention.endDate}` : ""}
+            </p>
+          </div>
+          <span
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+              STATUS_TONE[intervention.status] ?? "border-slate-200 bg-slate-50 text-slate-600"
+            }`}
+          >
+            {intervention.status.replace(/_/g, " ")}
+          </span>
+        </div>
+      </header>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Public fields
+        </h2>
+        <dl className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="Schedule" value={intervention.schedule} />
+          <Field label="Accommodations" value={intervention.accommodations} />
+          <Field label="Staff actions" value={intervention.staffActions} />
+          <Field label="Target outcomes" value={intervention.targetOutcomes} />
+        </dl>
+      </section>
+
+      {intervention.sensitive && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700">
+            Sensitive — counselor + principal only
+          </h2>
+          <dl className="mt-4 flex flex-col gap-4">
+            <Field label="Rationale" value={intervention.sensitive.rationale} />
+            <Field label="Counseling context" value={intervention.sensitive.counselingContext} />
+          </dl>
+        </section>
+      )}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Participants ({intervention.participants.length})
+        </h2>
+        {intervention.participants.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400">
+            No participants attached.
+          </p>
+        ) : (
+          <ul className="mt-4 grid gap-1 text-sm md:grid-cols-2 md:gap-x-6">
+            {intervention.participants.map((p) => (
+              <li key={p.enrollmentId} className="flex items-center justify-between border-b border-slate-100 py-1.5">
+                <span className="text-slate-700">{p.studentName}</span>
+                <span className="text-xs text-slate-400 font-mono">{p.lrn}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {intervention.status === "PENDING_APPROVAL" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Decision
+          </h2>
+          <ApprovalActions interventionId={intervention.id} />
+        </section>
+      )}
+
+      {intervention.status === "ACTIVE" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Interim revision
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Use only when the owning counselor is unavailable and the plan needs urgent change.
+          </p>
+          <Link
+            href={`/principal/interventions/${intervention.id}/edit`}
+            className="mt-3 inline-block rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-800 hover:bg-amber-100"
+          >
+            Open interim revision form
+          </Link>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</dt>
+      <dd className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
+        {value ?? <span className="text-slate-400">—</span>}
+      </dd>
+    </div>
+  );
+}

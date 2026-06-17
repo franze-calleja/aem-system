@@ -1,7 +1,8 @@
 'use client';
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { logoutAction } from "@/app/actions/auth";
 import {
   Sidebar,
   SidebarContent,
@@ -97,6 +98,7 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
   const router = useRouter();
   const { open } = useSidebar();
   const [hash, setHash] = useState("");
+  const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     const updateHash = () => setHash(window.location.hash);
@@ -110,9 +112,10 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
   const homeHref = roleHome[role];
 
   const handleLogout = () => {
-    window.localStorage.removeItem("aem-teacher-classes");
-    window.localStorage.removeItem("aem-counselor-data");
-    router.push("/");
+    startTransition(async () => {
+      await logoutAction();
+      router.refresh();
+    });
   };
 
   const isActiveHref = useMemo(
@@ -129,7 +132,7 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
 
       return pathname === path || pathname.startsWith(`${path}/`);
     },
-    [hash, pathname],
+    [hash, pathname, homeHref],
   );
 
   return (
@@ -191,9 +194,9 @@ export default function RoleSidebar({ role, badge, title, schoolYear, theme, sec
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleLogout} className={!open ? "justify-center" : undefined}>
+              <SidebarMenuButton onClick={handleLogout} disabled={pending} className={!open ? "justify-center" : undefined}>
                 <IconLogout />
-                <span className={open ? undefined : "sr-only"}>Logout</span>
+                <span className={open ? undefined : "sr-only"}>{pending ? "Signing out…" : "Logout"}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
