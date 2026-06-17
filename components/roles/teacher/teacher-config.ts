@@ -25,6 +25,12 @@ export const TEACHER_NAV: NavSection[] = [
     description:
       "View active intervention plans, log sessions you personally conducted, submit observation notes, and request plan revisions.",
   },
+  {
+    title: "Refer a Student",
+    href: "/teacher/refer",
+    description:
+      "Propose an intervention for a student in your sections; a counselor reviews and decides.",
+  },
 ];
 
 export const TEACHER_METRICS = [
