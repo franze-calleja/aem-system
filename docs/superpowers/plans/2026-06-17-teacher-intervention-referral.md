@@ -139,9 +139,7 @@ Expected: client generated; typecheck passes (no errors).
 
 ```bash
 git add prisma/schema.prisma prisma/migrations
-git commit -m "feat(db): add InterventionReferral model and audit actions
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "feat(db): add InterventionReferral model and audit actions"
 ```
 
 ---
@@ -260,9 +258,7 @@ Expected: passes.
 
 ```bash
 git add lib/teacher/queries.ts
-git commit -m "feat(teacher): referral query helpers and scope guard
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "feat(teacher): referral query helpers and scope guard"
 ```
 
 ---
@@ -363,9 +359,7 @@ Expected: both pass.
 
 ```bash
 git add app/actions/teacher/referrals.ts
-git commit -m "feat(teacher): createReferralAction with scope guard and audit
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "feat(teacher): createReferralAction with scope guard and audit"
 ```
 
 ---
@@ -615,9 +609,7 @@ Expected: all pass; `/teacher/refer` appears in the build route list.
 
 ```bash
 git add app/teacher/refer components/teacher/referral-form.tsx components/roles/teacher/teacher-config.ts
-git commit -m "feat(teacher): refer-a-student page, form, and nav
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "feat(teacher): refer-a-student page, form, and nav"
 ```
 
 ---
@@ -800,9 +792,7 @@ Expected: both pass.
 
 ```bash
 git add lib/intervention/queries.ts app/actions/counselor/interventions.ts app/actions/counselor/referrals.ts
-git commit -m "feat(counselor): accept/decline referral backend and prefill query
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "feat(counselor): accept/decline referral backend and prefill query"
 ```
 
 ---
@@ -1026,9 +1016,7 @@ Expected: all pass; `/counselor/referrals` and the updated `/counselor/intervent
 
 ```bash
 git add app/counselor/referrals components/counselor/referral-queue.tsx components/roles/counselor/counselor-config.ts app/counselor/interventions/new/page.tsx components/counselor/intervention-builder-form.tsx
-git commit -m "feat(counselor): referrals queue, accept prefill wiring, and nav
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "feat(counselor): referrals queue, accept prefill wiring, and nav"
 ```
 
 ---
@@ -1069,9 +1057,7 @@ Expected: `REFERRAL_CREATED`, `REFERRAL_ACCEPTED`, `REFERRAL_DECLINED` rows pres
 
 ```bash
 git add docs/AEM_Development_Phases.md
-git commit -m "docs: record teacher intervention referral in phase tracker
-
-Co-authored-by: Claude <noreply@anthropic.com>"
+git commit -m "docs: record teacher intervention referral in phase tracker"
 ```
 
 ---
