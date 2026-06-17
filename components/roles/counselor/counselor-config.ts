@@ -20,6 +20,12 @@ export const COUNSELOR_NAV: NavSection[] = [
       "Review AI-generated recommendation drafts and build formal individual, section, grade-level, or school-wide intervention plans.",
   },
   {
+    title: "Teacher Referrals",
+    href: "/counselor/referrals",
+    description:
+      "Review pending teacher referrals. Accept to pre-fill a new intervention you own, or decline with a reason shared back to the referring teacher.",
+  },
+  {
     title: "Pattern Inbox",
     href: "/counselor/patterns",
     description:

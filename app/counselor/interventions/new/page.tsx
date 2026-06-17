@@ -5,24 +5,27 @@ import { getActiveSchoolYear } from "@/lib/active-year";
 import {
   getInterventionTargets,
   getRecommendationForPrefill,
+  getReferralForPrefill,
 } from "@/lib/intervention/queries";
 import InterventionBuilderForm from "@/components/counselor/intervention-builder-form";
 
 export default async function NewInterventionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fromRecommendation?: string }>;
+  searchParams: Promise<{ fromRecommendation?: string; fromReferral?: string }>;
 }) {
   await requireRole("COUNSELOR");
   const sy = await getActiveSchoolYear();
   if (!sy) notFound();
 
-  const { fromRecommendation } = await searchParams;
+  const { fromRecommendation, fromReferral } = await searchParams;
 
   const targets = await getInterventionTargets(sy.id);
   const prefill = fromRecommendation
     ? await getRecommendationForPrefill(fromRecommendation, sy.id)
-    : null;
+    : fromReferral
+      ? await getReferralForPrefill(fromReferral, sy.id)
+      : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -40,7 +43,9 @@ export default async function NewInterventionPage({
         </p>
         {prefill && (
           <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Prefilled from recommendation draft <span className="font-mono">{prefill.id}</span>. On save this draft will be marked INSTANTIATED.
+            {prefill.source === "REFERRAL"
+              ? <>Prefilled from teacher referral <span className="font-mono">{prefill.id}</span>. On save this referral will be marked ACCEPTED.</>
+              : <>Prefilled from recommendation draft <span className="font-mono">{prefill.id}</span>. On save this draft will be marked INSTANTIATED.</>}
           </p>
         )}
       </header>

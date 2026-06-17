@@ -131,7 +131,8 @@ export default function InterventionBuilderForm({ targets, prefill }: Props) {
       targetOutcomes: targetOutcomes || undefined,
       rationale,
       counselingContext: counselingContext || undefined,
-      triggeringRecommendationId: prefill?.id,
+      triggeringRecommendationId: prefill?.source === "REFERRAL" ? undefined : prefill?.id,
+      triggeringReferralId: prefill?.source === "REFERRAL" ? prefill?.id : undefined,
     };
 
     startTransition(async () => {
