@@ -41,6 +41,8 @@ export default async function ClassDetailPage({
     getSectionRiskForTeacher(session.user.id, detail.assignment.sectionId, sy.id),
   ]);
 
+  const sexByEnrollment = new Map(detail.enrollments.map((e) => [e.id, e.student.sex]));
+
   return (
     <div className="flex flex-col gap-4">
       <Link
@@ -86,14 +88,21 @@ export default async function ClassDetailPage({
           description: b.description,
           recordedByName: b.recordedBy?.name ?? null,
         }))}
-        sectionRisk={sectionRisk.map((r) => ({
-          enrollmentId: r.enrollmentId,
-          studentId: r.studentId,
-          firstName: r.firstName,
-          lastName: r.lastName,
-          riskScore: r.riskScore,
-          riskBand: r.riskBand,
-        }))}
+        // Risk rows come from a query shared with /teacher/student-risk that
+        // doesn't select sex; every risk row is also in this roster.
+        sectionRisk={sectionRisk.flatMap((r) => {
+          const sex = sexByEnrollment.get(r.enrollmentId);
+          if (!sex) return [];
+          return [{
+            enrollmentId: r.enrollmentId,
+            studentId: r.studentId,
+            firstName: r.firstName,
+            lastName: r.lastName,
+            riskScore: r.riskScore,
+            riskBand: r.riskBand,
+            sex,
+          }];
+        })}
       />
     </div>
   );

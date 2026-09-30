@@ -1445,6 +1445,20 @@ covering aggregate use.
 Still deferred: Cohort Trend and Year-Over-Year Drift pattern rules (spec §8).
 The drift row on this page remains a display calculation, not a `PatternMatch`.
 
+### Teacher class tabs grouped Boys / Girls *(2026-09-30)*
+
+Requested 2026-09-30: teachers check a class boys first, then girls, each
+alphabetical — the usual class-record order. Display-only; no data or
+visibility change, so no spec change.
+
+- [x] [class-detail.tsx](../components/roles/teacher/class-detail.tsx) — `groupBySex` splits each list into Boys then Girls, keeping the incoming order inside a group. Roster, Attendance, and Gradebook tables get a header row per group; numbering restarts at 1 per group. Risk keeps its highest-score-first order inside each group. Behavioral's student picker uses `<optgroup>`; its incident timeline stays date-ordered.
+- [x] Attendance arrow-key navigation steps over the group header rows.
+- [x] Risk rows get `sex` on the class page from the roster by `enrollmentId`, so the shared `getSectionRiskForTeacher` query is unchanged.
+
+Verified 2026-09-30 in headless Chrome as the 9-Newton adviser (2 boys, 3
+girls): all five tabs group correctly; ArrowDown from the last boy lands on the
+first girl and ArrowUp returns; P/A/T/E shortcuts still work.
+
 ---
 
 ## Cut Order (if running behind)
