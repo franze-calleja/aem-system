@@ -32,6 +32,12 @@ export const COUNSELOR_NAV: NavSection[] = [
       "Resolve or dismiss algorithmic pattern matches across individual, section, grade, and school scopes.",
   },
   {
+    title: "Cohort Analysis",
+    href: "/counselor/cohort-analysis",
+    description:
+      "Compare a grade level across school years — risk bands, average risk and sub-scores, intervention outcomes, year-over-year drift, and an AI-written comparison of the scores.",
+  },
+  {
     title: "What-If Simulator",
     href: "/counselor/what-if",
     description:

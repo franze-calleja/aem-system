@@ -3,12 +3,12 @@ import CohortAnalysisView, {
   type CohortSearchParams,
 } from "@/components/roles/shared/cohort-analysis-view";
 
-export default async function PrincipalCohortAnalysisPage({
+export default async function CounselorCohortAnalysisPage({
   searchParams,
 }: {
   // Next 16: searchParams is async.
   searchParams: Promise<CohortSearchParams>;
 }) {
-  await requireRole("PRINCIPAL");
-  return <CohortAnalysisView basePath="/principal/cohort-analysis" params={await searchParams} />;
+  await requireRole("COUNSELOR");
+  return <CohortAnalysisView basePath="/counselor/cohort-analysis" params={await searchParams} />;
 }

@@ -27,7 +27,7 @@ export const PRINCIPAL_NAV: NavSection[] = [
     title: "Cohort analysis",
     href: "/principal/cohort-analysis",
     description:
-      "Compare a grade level across school years — risk band distribution, intervention pipeline, completed-intervention outcomes, year-over-year drift. CSV export available.",
+      "Compare a grade level across school years — risk band distribution, intervention pipeline, average risk and sub-scores, completed-intervention outcomes, year-over-year drift, and an AI-written comparison of the scores. CSV export available.",
   },
   {
     title: "How this system works",

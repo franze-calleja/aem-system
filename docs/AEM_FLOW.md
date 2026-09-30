@@ -179,6 +179,10 @@ A unified review center for `InterventionNote` records:
 - Cards link to: affected student/section/grade/school, contributing data points, suggested action.
 - Cross-reference view: see if multiple students share the same pattern (early signal of class-wide issues).
 
+#### C7a. Cohort Analysis *(added 2026-09-30)*
+- Same aggregate view as D6: grade level + multiple school years, side by side.
+- Aggregate-only (counts and means) — no per-student rows, no sensitive intervention fields.
+
 #### C8. Outcome Tracking
 - For each closed intervention: outcome record, contributing observation notes, participation summary (per student for broader-scope plans via `InterventionParticipation`).
 - Outcome feeds into next risk recompute — successful interventions reduce risk; unsuccessful may elevate.
@@ -213,6 +217,8 @@ A unified review center for `InterventionNote` records:
 - Select grade level + multiple school years (e.g., "Grade 9, last 3 SYs").
 - Side-by-side: risk band distributions, intervention counts, outcome rates.
 - Year-over-year drift indicators.
+- Average risk score and average academic / attendance / behavioral sub-scores per year.
+- Gemini comparison narrative built from those numbers (falls back to the table alone when Gemini is unavailable).
 - Export summary.
 
 #### D7. Intervention Outcomes Review
@@ -302,10 +308,10 @@ Each flow corresponds to a spec flow (Section 11) or a cross-cutting workflow. F
 4. Upload Attendance CSV in monthly chunks.
 5. Review **Import Log** entry.
 
-### Flow 8 — Principal: Cross-Year Cohort Comparison *(spec Flow H)*
+### Flow 8 — Principal / Counselor: Cross-Year Cohort Comparison *(spec Flow H)*
 1. **Cohort Analysis** → select "Grade 9, last 3 SYs".
-2. View side-by-side risk band distributions, intervention counts, outcome rates.
-3. Flag year-over-year drift.
+2. View side-by-side risk band distributions, average sub-scores, intervention counts, outcome rates.
+3. Flag year-over-year drift; read the AI comparison written from those scores.
 4. Export summary for faculty meeting.
 
 ### Flow 9 — Teacher Feedback → Plan Revision *(spec Flow I)*
