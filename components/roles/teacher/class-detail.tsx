@@ -49,6 +49,7 @@ type StudentRisk = {
   lastName: string;
   riskScore: number | null;
   riskBand: "HIGH" | "MODERATE" | "LOW" | null;
+  sex: "MALE" | "FEMALE";
 };
 
 type Props = {
@@ -157,6 +158,27 @@ const CATEGORY_LABELS: Record<string, string> = {
 const ALL_KINDS: AssessmentKind[] = ["REGULAR", "QUIZ", "PERIODICAL", "PRE_TEST", "POST_TEST"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+type Sex = "MALE" | "FEMALE";
+
+// Class records are checked boys first, then girls, each alphabetical. Keeps the
+// incoming order within a group, so callers control the sort (name or risk).
+function groupBySex<T extends { sex: Sex }>(rows: T[]): Array<{ sex: Sex; label: string; rows: T[] }> {
+  return [
+    { sex: "MALE" as const, label: "Boys", rows: rows.filter((r) => r.sex === "MALE") },
+    { sex: "FEMALE" as const, label: "Girls", rows: rows.filter((r) => r.sex === "FEMALE") },
+  ].filter((g) => g.rows.length > 0);
+}
+
+function SexGroupHeaderRow({ label, count, colSpan }: { label: string; count: number; colSpan: number }) {
+  return (
+    <tr className="bg-slate-100/70">
+      <td colSpan={colSpan} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+        {label} <span className="font-normal text-slate-400">({count})</span>
+      </td>
+    </tr>
+  );
+}
 
 function formatDateLong(iso: string): string {
   return new Date(iso + "T00:00:00.000Z").toLocaleDateString("en-US", {
@@ -420,36 +442,43 @@ function RiskTab({ rows, sectionLabel }: { rows: StudentRisk[]; sectionLabel: st
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             All students by risk score
           </p>
-          <ul className="mt-2 divide-y divide-slate-100">
-            {visibleRows.map((r, i) => {
-              const band = r.riskBand as "HIGH" | "MODERATE" | "LOW";
-              const cfg = BAND_CONFIG[band];
-              const pct = r.riskScore !== null ? Math.round(r.riskScore) : null;
-              return (
-                <li key={r.enrollmentId} className="flex items-center gap-3 py-2">
-                  <span className="w-5 text-right text-xs tabular-nums text-slate-400">{i + 1}</span>
-                  <Link
-                    href={`/teacher/students/${r.studentId}`}
-                    className="flex-1 text-sm text-slate-800 hover:text-emerald-700 hover:underline"
-                  >
-                    {r.lastName}, {r.firstName}
-                  </Link>
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.badge}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-                    {band}
-                  </span>
-                  <span className="w-10 text-right text-xs tabular-nums text-slate-500">
-                    {pct !== null ? pct : "—"}
-                  </span>
-                </li>
-              );
-            })}
-            {visibleRows.length === 0 && (
-              <li className="py-6 text-center text-sm text-slate-400">
-                No students match &ldquo;{query}&rdquo;.
-              </li>
-            )}
-          </ul>
+          {groupBySex(visibleRows).map((group) => (
+            <div key={group.sex} className="mt-3">
+              <p className="rounded-lg bg-slate-100/70 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                {group.label} <span className="font-normal text-slate-400">({group.rows.length})</span>
+              </p>
+              <ul className="mt-1 divide-y divide-slate-100">
+                {group.rows.map((r, i) => {
+                  const band = r.riskBand as "HIGH" | "MODERATE" | "LOW";
+                  const cfg = BAND_CONFIG[band];
+                  const pct = r.riskScore !== null ? Math.round(r.riskScore) : null;
+                  return (
+                    <li key={r.enrollmentId} className="flex items-center gap-3 py-2">
+                      <span className="w-5 text-right text-xs tabular-nums text-slate-400">{i + 1}</span>
+                      <Link
+                        href={`/teacher/students/${r.studentId}`}
+                        className="flex-1 text-sm text-slate-800 hover:text-emerald-700 hover:underline"
+                      >
+                        {r.lastName}, {r.firstName}
+                      </Link>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.badge}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+                        {band}
+                      </span>
+                      <span className="w-10 text-right text-xs tabular-nums text-slate-500">
+                        {pct !== null ? pct : "—"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+          {visibleRows.length === 0 && (
+            <p className="py-6 text-center text-sm text-slate-400">
+              No students match &ldquo;{query}&rdquo;.
+            </p>
+          )}
         </div>
       ) : (
         <div className="mt-6 rounded-xl border border-dashed border-slate-200 py-10 text-center">
@@ -502,20 +531,25 @@ function RosterTab({ students }: { students: Student[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visible.map((s, i) => (
-              <tr key={s.enrollmentId} className="transition-colors hover:bg-slate-50/60">
-                <td className="px-4 py-3 tabular-nums text-slate-400">{i + 1}</td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-600">{s.lrn}</td>
-                <td className="px-4 py-3 font-medium">
-                  <Link
-                    href={`/teacher/students/${s.studentId}`}
-                    className="text-slate-900 hover:text-emerald-700 hover:underline"
-                  >
-                    {s.lastName}, {s.firstName}{s.middleName ? ` ${s.middleName[0]}.` : ""}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{s.sex === "MALE" ? "Male" : "Female"}</td>
-              </tr>
+            {groupBySex(visible).map((group) => (
+              <React.Fragment key={group.sex}>
+                <SexGroupHeaderRow label={group.label} count={group.rows.length} colSpan={4} />
+                {group.rows.map((s, i) => (
+                  <tr key={s.enrollmentId} className="transition-colors hover:bg-slate-50/60">
+                    <td className="px-4 py-3 tabular-nums text-slate-400">{i + 1}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{s.lrn}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link
+                        href={`/teacher/students/${s.studentId}`}
+                        className="text-slate-900 hover:text-emerald-700 hover:underline"
+                      >
+                        {s.lastName}, {s.firstName}{s.middleName ? ` ${s.middleName[0]}.` : ""}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{s.sex === "MALE" ? "Male" : "Female"}</td>
+                  </tr>
+                ))}
+              </React.Fragment>
             ))}
             {visible.length === 0 && (
               <tr>
@@ -580,13 +614,21 @@ function AttendanceTab({
       event.preventDefault();
       setStatus(enrollmentId, STATUS_MAP[key]);
     }
+    // Step over the Boys/Girls header rows, which aren't focusable (tabIndex -1).
+    const step = (dir: "next" | "prev") => {
+      let el = dir === "next" ? event.currentTarget.nextElementSibling : event.currentTarget.previousElementSibling;
+      while (el instanceof HTMLElement && el.tabIndex < 0) {
+        el = dir === "next" ? el.nextElementSibling : el.previousElementSibling;
+      }
+      if (el instanceof HTMLElement) el.focus();
+    };
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      (event.currentTarget.nextElementSibling as HTMLElement | null)?.focus();
+      step("next");
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      (event.currentTarget.previousElementSibling as HTMLElement | null)?.focus();
+      step("prev");
     }
   };
 
@@ -750,47 +792,52 @@ function AttendanceTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visibleStudents.map((s, i) => {
-                const status = draft[s.enrollmentId] ?? "PRESENT";
-                return (
-                  <tr
-                    key={s.enrollmentId}
-                    tabIndex={0}
-                    onKeyDown={(e) => onRowKeyDown(s.enrollmentId, e)}
-                    className={`outline-none transition focus:ring-2 focus:ring-inset focus:ring-emerald-300 ${
-                      STATUS_CONFIG[status].rowBg
-                    }`}
-                  >
-                    <td className="px-4 py-3 tabular-nums text-slate-400">{i + 1}</td>
-                    <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/teacher/students/${s.studentId}`}
-                        className="text-slate-900 hover:text-emerald-700 hover:underline"
+              {groupBySex(visibleStudents).map((group) => (
+                <React.Fragment key={group.sex}>
+                  <SexGroupHeaderRow label={group.label} count={group.rows.length} colSpan={3} />
+                  {group.rows.map((s, i) => {
+                    const status = draft[s.enrollmentId] ?? "PRESENT";
+                    return (
+                      <tr
+                        key={s.enrollmentId}
+                        tabIndex={0}
+                        onKeyDown={(e) => onRowKeyDown(s.enrollmentId, e)}
+                        className={`outline-none transition focus:ring-2 focus:ring-inset focus:ring-emerald-300 ${
+                          STATUS_CONFIG[status].rowBg
+                        }`}
                       >
-                        {s.lastName}, {s.firstName}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {(["PRESENT", "ABSENT", "TARDY", "EXCUSED"] as const).map((st) => (
-                          <button
-                            key={st}
-                            type="button"
-                            onClick={() => setStatus(s.enrollmentId, st)}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                              status === st
-                                ? STATUS_CONFIG[st].bg
-                                : STATUS_CONFIG[st].inactive
-                            }`}
+                        <td className="px-4 py-3 tabular-nums text-slate-400">{i + 1}</td>
+                        <td className="px-4 py-3 font-medium">
+                          <Link
+                            href={`/teacher/students/${s.studentId}`}
+                            className="text-slate-900 hover:text-emerald-700 hover:underline"
                           >
-                            {STATUS_CONFIG[st].label}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                            {s.lastName}, {s.firstName}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1.5">
+                            {(["PRESENT", "ABSENT", "TARDY", "EXCUSED"] as const).map((st) => (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => setStatus(s.enrollmentId, st)}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                  status === st
+                                    ? STATUS_CONFIG[st].bg
+                                    : STATUS_CONFIG[st].inactive
+                                }`}
+                              >
+                                {STATUS_CONFIG[st].label}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
               {visibleStudents.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-400">
@@ -1187,80 +1234,85 @@ function GradebookTab({
                 </td>
               </tr>
             )}
-            {visibleStudents.map((s, i) => {
-              const allQ = quarterGrades.get(s.enrollmentId) ?? [];
-              const filtered = kindFilter === "ALL" ? allQ : allQ.filter((g) => g.assessmentKind === kindFilter);
-              const avg = calcAvg(filtered);
-              const rawInput = scoreInputs[s.enrollmentId] ?? "";
-              const inputNum = rawInput.trim() !== "" ? Number(rawInput) : null;
-              const inputPct = inputNum !== null && setupValid && Number.isFinite(inputNum)
-                ? Math.round((inputNum / maxScoreNum) * 1000) / 10
-                : null;
+            {groupBySex(visibleStudents).map((group) => (
+              <React.Fragment key={group.sex}>
+                <SexGroupHeaderRow label={group.label} count={group.rows.length} colSpan={totalCols} />
+                {group.rows.map((s, i) => {
+                  const allQ = quarterGrades.get(s.enrollmentId) ?? [];
+                  const filtered = kindFilter === "ALL" ? allQ : allQ.filter((g) => g.assessmentKind === kindFilter);
+                  const avg = calcAvg(filtered);
+                  const rawInput = scoreInputs[s.enrollmentId] ?? "";
+                  const inputNum = rawInput.trim() !== "" ? Number(rawInput) : null;
+                  const inputPct = inputNum !== null && setupValid && Number.isFinite(inputNum)
+                    ? Math.round((inputNum / maxScoreNum) * 1000) / 10
+                    : null;
 
-              return (
-                <tr key={s.enrollmentId} className="align-middle hover:bg-slate-50/60">
-                  <td className="px-4 py-3 tabular-nums text-slate-400">{i + 1}</td>
-                  <td className="px-4 py-3 font-medium whitespace-nowrap">
-                    <Link
-                      href={`/teacher/students/${s.studentId}`}
-                      className="text-slate-900 hover:text-emerald-700 hover:underline"
-                    >
-                      {s.lastName}, {s.firstName}
-                    </Link>
-                  </td>
-                  {/* Existing saved cells */}
-                  {columns.map((col) => {
-                    const g = getCell(allQ, col);
-                    return (
-                      <td key={col.colKey} className="px-3 py-3 text-center">
-                        {g ? (
-                          <span className={`inline-block rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums ${KIND_CONFIG[col.kind].color}`}>
-                            {g.score}/{g.maxScore}
-                          </span>
+                  return (
+                    <tr key={s.enrollmentId} className="align-middle hover:bg-slate-50/60">
+                      <td className="px-4 py-3 tabular-nums text-slate-400">{i + 1}</td>
+                      <td className="px-4 py-3 font-medium whitespace-nowrap">
+                        <Link
+                          href={`/teacher/students/${s.studentId}`}
+                          className="text-slate-900 hover:text-emerald-700 hover:underline"
+                        >
+                          {s.lastName}, {s.firstName}
+                        </Link>
+                      </td>
+                      {/* Existing saved cells */}
+                      {columns.map((col) => {
+                        const g = getCell(allQ, col);
+                        return (
+                          <td key={col.colKey} className="px-3 py-3 text-center">
+                            {g ? (
+                              <span className={`inline-block rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums ${KIND_CONFIG[col.kind].color}`}>
+                                {g.score}/{g.maxScore}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      {/* New pending input cell */}
+                      {setupOpen && setupValid && (
+                        <td className="px-3 py-2 text-center border-l-2 border-emerald-200 bg-emerald-50/40">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <input
+                              type="number"
+                              min={0}
+                              max={maxScoreNum}
+                              value={rawInput}
+                              onChange={(e) =>
+                                setScoreInputs((prev) => ({ ...prev, [s.enrollmentId]: e.target.value }))
+                              }
+                              placeholder="—"
+                              className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center text-sm tabular-nums focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                            />
+                            {inputPct !== null && (
+                              <span className={`text-[11px] font-semibold tabular-nums ${
+                                inputPct >= 75 ? "text-emerald-700"
+                                : inputPct >= 60 ? "text-amber-700"
+                                : "text-rose-700"
+                              }`}>
+                                {inputPct}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {/* Avg */}
+                      <td className="px-4 py-3 text-center">
+                        {avg === null ? (
+                          <span className="text-slate-400">—</span>
                         ) : (
-                          <span className="text-slate-300">—</span>
+                          <span className={`text-sm font-bold tabular-nums ${avgColor(avg)}`}>{avg}%</span>
                         )}
                       </td>
-                    );
-                  })}
-                  {/* New pending input cell */}
-                  {setupOpen && setupValid && (
-                    <td className="px-3 py-2 text-center border-l-2 border-emerald-200 bg-emerald-50/40">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <input
-                          type="number"
-                          min={0}
-                          max={maxScoreNum}
-                          value={rawInput}
-                          onChange={(e) =>
-                            setScoreInputs((prev) => ({ ...prev, [s.enrollmentId]: e.target.value }))
-                          }
-                          placeholder="—"
-                          className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center text-sm tabular-nums focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        />
-                        {inputPct !== null && (
-                          <span className={`text-[11px] font-semibold tabular-nums ${
-                            inputPct >= 75 ? "text-emerald-700"
-                            : inputPct >= 60 ? "text-amber-700"
-                            : "text-rose-700"
-                          }`}>
-                            {inputPct}%
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                  {/* Avg */}
-                  <td className="px-4 py-3 text-center">
-                    {avg === null ? (
-                      <span className="text-slate-400">—</span>
-                    ) : (
-                      <span className={`text-sm font-bold tabular-nums ${avgColor(avg)}`}>{avg}%</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+                    </tr>
+                  );
+                })}
+              </React.Fragment>
+            ))}
             {visibleStudents.length === 0 && students.length > 0 && (
               <tr>
                 <td colSpan={totalCols} className="px-4 py-8 text-center text-sm text-slate-400">
@@ -1320,7 +1372,7 @@ function BehavioralTab({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [enrollmentId, setEnrollmentId] = useState<string>(students[0]?.enrollmentId ?? "");
+  const [enrollmentId, setEnrollmentId] = useState<string>(groupBySex(students)[0]?.rows[0]?.enrollmentId ?? "");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState<"ACADEMIC" | "ATTENDANCE_RELATED" | "BEHAVIORAL" | "SOCIAL_EMOTIONAL">("BEHAVIORAL");
   const [severity, setSeverity] = useState<"LOW" | "MODERATE" | "HIGH">("LOW");
@@ -1394,10 +1446,14 @@ function BehavioralTab({
                 onChange={(e) => setEnrollmentId(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
               >
-                {students.map((s) => (
-                  <option key={s.enrollmentId} value={s.enrollmentId}>
-                    {s.lastName}, {s.firstName}
-                  </option>
+                {groupBySex(students).map((group) => (
+                  <optgroup key={group.sex} label={group.label}>
+                    {group.rows.map((s) => (
+                      <option key={s.enrollmentId} value={s.enrollmentId}>
+                        {s.lastName}, {s.firstName}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>
