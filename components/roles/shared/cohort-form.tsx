@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type SchoolYear = { id: string; label: string; isActive: boolean };
 
 export default function CohortForm({
+  basePath,
   gradeOptions,
   allYears,
   selectedGrade,
@@ -13,6 +14,7 @@ export default function CohortForm({
   hasSlices,
   csvHref,
 }: {
+  basePath: string;
   gradeOptions: string[];
   allYears: SchoolYear[];
   selectedGrade: string | undefined;
@@ -35,7 +37,7 @@ export default function CohortForm({
     const params = new URLSearchParams();
     if (grade) params.set("grade", grade);
     if (yearIds.length > 0) params.set("years", yearIds.join(","));
-    router.push(`/principal/cohort-analysis?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   };
 
   return (

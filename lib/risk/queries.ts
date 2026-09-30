@@ -501,6 +501,9 @@ export type CohortYearSlice = {
   moderate: number;
   high: number;
   unscored: number;
+  // Means over scored enrollments only; null when nobody in the slice is scored.
+  avgScore: number | null;
+  avgSubScores: { academic: number; attendance: number; behavioral: number } | null;
   // Touching this grade level only.
   interventions: {
     active: number;
@@ -537,19 +540,28 @@ export async function getCohortYearSlice(
       riskAssessments: {
         orderBy: { computedAt: "desc" },
         take: 1,
-        select: { band: true },
+        select: { band: true, score: true, factors: true },
       },
     },
   });
 
   let low = 0, moderate = 0, high = 0, unscored = 0;
+  let scoreSum = 0, academicSum = 0, attendanceSum = 0, behavioralSum = 0;
   for (const e of enrollments) {
-    const band = e.riskAssessments[0]?.band;
+    const latest = e.riskAssessments[0];
+    const band = latest?.band;
     if (band === "LOW") low++;
     else if (band === "MODERATE") moderate++;
     else if (band === "HIGH") high++;
     else unscored++;
+    if (latest) {
+      scoreSum += latest.score;
+      academicSum += readSubScore(latest.factors, "academic");
+      attendanceSum += readSubScore(latest.factors, "attendance");
+      behavioralSum += readSubScore(latest.factors, "behavioral");
+    }
   }
+  const scored = enrollments.length - unscored;
 
   // Interventions touching this grade in this SY: STUDENT-scope interventions
   // for any enrolled student here, SECTION-scope for any section at this grade,
@@ -619,9 +631,28 @@ export async function getCohortYearSlice(
     moderate,
     high,
     unscored,
+    avgScore: scored === 0 ? null : scoreSum / scored,
+    avgSubScores:
+      scored === 0
+        ? null
+        : {
+            academic: academicSum / scored,
+            attendance: attendanceSum / scored,
+            behavioral: behavioralSum / scored,
+          },
     interventions,
     outcomes,
   };
+}
+
+// `factors` is stored as Json; read one numeric sub-score without trusting the shape.
+function readSubScore(
+  factors: Prisma.JsonValue,
+  key: "academic" | "attendance" | "behavioral",
+): number {
+  if (factors === null || typeof factors !== "object" || Array.isArray(factors)) return 0;
+  const value = factors[key];
+  return typeof value === "number" ? value : 0;
 }
 
 export async function getCohortAnalysis(

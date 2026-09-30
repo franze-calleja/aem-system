@@ -134,4 +134,57 @@ export async function generateSchoolSummary(
   });
 }
 
+// ─── Cohort comparison (principal + counselor cohort analysis) ──────────────
+
+type CohortSummaryYear = {
+  schoolYearLabel: string;
+  total: number;
+  low: number;
+  moderate: number;
+  high: number;
+  unscored: number;
+  avgScore: number | null;
+  avgSubScores: { academic: number; attendance: number; behavioral: number } | null;
+  interventionsTotal: number;
+  interventionsCompleted: number;
+  outcomesImproving: number;
+  outcomesDeclining: number;
+};
+
+type CohortSummaryInput = {
+  gradeLevel: string;
+  years: CohortSummaryYear[]; // oldest first
+};
+
+export async function generateCohortSummary(
+  input: CohortSummaryInput,
+): Promise<GenerateResult> {
+  const { gradeLevel, years } = input;
+  const pctOf = (n: number, total: number) =>
+    total === 0 ? "0.0%" : `${((n / total) * 100).toFixed(1)}%`;
+
+  const yearLines = years.map((y) => {
+    const sub = y.avgSubScores
+      ? `avg sub-scores academic=${y.avgSubScores.academic.toFixed(1)}, attendance=${y.avgSubScores.attendance.toFixed(1)}, behavioral=${y.avgSubScores.behavioral.toFixed(1)}`
+      : "no sub-scores (unscored)";
+    return `- ${y.schoolYearLabel}: enrolled=${y.total}, LOW=${y.low}, MODERATE=${y.moderate}, HIGH=${y.high} (HIGH rate ${pctOf(y.high, y.total)}), unscored=${y.unscored}, avg risk score=${y.avgScore === null ? "n/a" : y.avgScore.toFixed(1)}, ${sub}; interventions=${y.interventionsTotal} (completed ${y.interventionsCompleted}), outcomes improving=${y.outcomesImproving}, declining=${y.outcomesDeclining}`;
+  });
+
+  const prompt = [
+    `You are a school-counseling assistant. Write a 3–5 sentence comparison of one grade level across school years for the principal and guidance counselor. Describe the direction of change in the HIGH-risk rate and average risk score, name which sub-score (academic, attendance, or behavioral) moved the most and in which direction, and mention whether intervention outcomes improved. If a year is mostly unscored, say the comparison is limited for that year. Only use the numbers given; do not speculate about causes outside the data and do not give clinical advice. Close with one concrete question the school team should look into. No headings or bullets.`,
+    ``,
+    `Grade level: ${gradeLevel}`,
+    `Sub-scores and risk scores are 0–100, higher = more risk.`,
+    `Per school year (oldest first):`,
+    ...yearLines,
+    ``,
+    `Write the comparison now.`,
+  ].join("\n");
+
+  return generateText({
+    prompt,
+    kind: "COHORT_SUMMARY",
+  });
+}
+
 export { fallbackMessage };

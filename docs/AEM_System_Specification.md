@@ -132,6 +132,7 @@ Every analytical view in the system has an active school year context. Switching
 - Generate intervention recommendation drafts (Gemini-assisted) and edit before saving as actual interventions
 - View pattern detection alerts at all scopes (student, section, grade, school)
 - Cross-reference: see if multiple students share the same risk pattern (early signal of class-wide issues)
+- Cross-year cohort comparison — same aggregate view as the principal's Cohort Analysis (added 2026-09-30)
 - Full visibility into all intervention rationale, context, and revision history
 
 ### Principal
@@ -291,6 +292,7 @@ Used for natural-language tasks only:
 - Generates plain-language narrative explanations of risk classifications
 - Drafts intervention recommendations across scopes (counselor reviews and edits)
 - Generates section, grade, and school-level narrative summaries for the principal
+- Generates a cross-year cohort comparison narrative from the algorithm's scores (principal and counselor Cohort Analysis)
 - Powers the AI literacy assistant
 
 Server-side only. Aggressively cached. Falls back gracefully when quota is exhausted.
@@ -465,7 +467,7 @@ Admin opens Import wizard → selects target school year (e.g., SY 2023–2024) 
 
 ### Flow H — Cross-year cohort comparison
 
-Principal navigates to "Cohort Analysis" → selects "Grade 9, last 3 school years" → system displays risk band distributions, intervention counts, and outcome rates side-by-side across years → flags any year-over-year drift → principal exports summary for faculty meeting.
+Principal navigates to "Cohort Analysis" → selects "Grade 9, last 3 school years" → system displays risk band distributions, intervention counts, and outcome rates side-by-side across years → flags any year-over-year drift → Gemini writes a short comparison from the band distributions and average sub-scores → principal exports summary for faculty meeting. The counselor has the same view.
 
 ### Flow I — Teacher feedback triggers a plan revision
 

@@ -1422,6 +1422,31 @@ rows present for every case.
 
 ---
 
+## Phase 12 — Counselor Cohort Analysis + AI Cohort Comparison ✅ *(complete 2026-09-30)*
+
+Requested 2026-09-30: give the counselor the cross-year comparison the
+principal already had, and add an AI summary based on the algorithm's scores.
+Spec §5 (Counselor), §6.8, and Flow H updated to match; `AEM_FLOW.md` gains C7a.
+
+- [x] Page body moved to [components/roles/shared/cohort-analysis-view.tsx](../components/roles/shared/cohort-analysis-view.tsx) (+ `cohort-form.tsx`, now taking `basePath`). [/principal/cohort-analysis](../app/principal/cohort-analysis/page.tsx) and new [/counselor/cohort-analysis](../app/counselor/cohort-analysis/page.tsx) are thin wrappers that `requireRole` their own role. Counselor nav entry added.
+- [x] `CohortYearSlice` gains `avgScore` and `avgSubScores` (academic / attendance / behavioral), averaged over scored enrollments only. Rendered as table rows and CSV rows.
+- [x] `generateCohortSummary` in [lib/ai/narrative.ts](../lib/ai/narrative.ts) — prompt carries only per-year aggregates (no names, no LRNs). Cache kind `COHORT_SUMMARY`; `AICache.kind` is a string, so no migration. Rendered inside `<Suspense>` so the table never waits on Gemini.
+- [x] Verified 2026-09-30 against the dev server: principal and counselor each 200 on their own route and 307 on the other's; teacher 307 on both. No-key fallback message renders. Averaging checked with two assessments set to known values (expected 10 / 10 / 10 / 3, got the same), then restored.
+
+Not verified: a real Gemini response (no `GEMINI_API_KEY` locally), and a
+multi-year comparison with non-zero scores — the local DB currently holds one
+SY with 10 enrollments and no grades or attendance.
+
+Decision recorded: the narrative counts every enrollment, including students
+whose AI_ANALYSIS consent is revoked, matching `generateSchoolSummary`. Only
+grade-level aggregates reach Gemini. Revisit if the school reads consent as
+covering aggregate use.
+
+Still deferred: Cohort Trend and Year-Over-Year Drift pattern rules (spec §8).
+The drift row on this page remains a display calculation, not a `PatternMatch`.
+
+---
+
 ## Cut Order (if running behind)
 
 Per spec §15. Cut from the top of this list first. **Never cut anything below the line.**
