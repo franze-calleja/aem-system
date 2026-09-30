@@ -1,5 +1,6 @@
 import ChangePasswordForm from "@/components/auth/change-password-form";
-import { requireSession } from "@/lib/session";
+import Link from "next/link";
+import { requireSession, roleLandingPath } from "@/lib/session";
 
 export default async function ChangePasswordPage() {
   const session = await requireSession();
@@ -28,6 +29,15 @@ export default async function ChangePasswordPage() {
         <div className="my-8 h-px bg-slate-200" />
 
         <ChangePasswordForm forced={forced} />
+
+        {!forced && (
+          <Link
+            href={roleLandingPath(session.user.role)}
+            className="mt-4 block text-center text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            ← Back to workspace
+          </Link>
+        )}
       </div>
     </main>
   );

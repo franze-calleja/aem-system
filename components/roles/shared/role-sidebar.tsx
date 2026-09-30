@@ -80,6 +80,17 @@ function IconHelp() {
   );
 }
 
+function IconKey() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="15" r="4" />
+      <path d="M10.85 12.15L19 4" />
+      <path d="M18 5l2 2" />
+      <path d="M15 8l2 2" />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg aria-hidden="true" className="h-4 w-4 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -227,6 +238,16 @@ export default function RoleSidebar({ role, badge, title, theme, sections }: Rol
               >
                 <IconHelp />
                 <span className={open ? undefined : "sr-only"}>Help & Guides</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                href="/change-password"
+                active={pathname === "/change-password"}
+                className={!open ? "justify-center" : undefined}
+              >
+                <IconKey />
+                <span className={open ? undefined : "sr-only"}>Change password</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

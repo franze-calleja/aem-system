@@ -1406,6 +1406,20 @@ accepted.
 Not done, deliberately: no password history, expiry, or complexity rules
 beyond the length floor. Add them when there's a policy to implement.
 
+**Self-service password change for every role (2026-09-30).** The page and
+action above already handled a voluntary change; nothing linked to them.
+
+- [x] "Change password" item in the shared [role-sidebar.tsx](../components/roles/shared/role-sidebar.tsx) footer, so all four roles get it. "Back to workspace" link on `/change-password` when the change isn't forced.
+- [x] Per-user throttle on `changePasswordAction`: 5 attempts per 15 minutes, reset on success. Blocked attempts are audited as `LOGIN_FAILED` with `reason: rate_limited, context: change_password`. Keyed on the user, not the IP, because the threat is a hijacked session guessing the current password. In-memory like the login throttle, so the same single-instance caveat applies.
+
+Verified 2026-09-30 against the dev server: the sidebar link and page render
+for admin, teacher, counselor, and principal. Invoking the action as the
+teacher changed the password; the old one was then rejected at sign-in, the new
+one accepted, and the existing session kept working; the password was then
+restored. Six wrong attempts as the counselor: five "incorrect", the sixth
+throttled, and the correct password was also refused while throttled. Audit
+rows present for every case.
+
 ---
 
 ## Cut Order (if running behind)

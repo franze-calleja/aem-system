@@ -7,6 +7,7 @@ import { z } from "zod";
 import { signIn, signOut, unstable_update } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { rateLimit, rateLimitReset } from "@/lib/rate-limit";
 import { requireSession, roleLandingPath } from "@/lib/session";
 
 export type LoginResult =
@@ -62,6 +63,10 @@ const changePasswordSchema = z
     path: ["newPassword"],
   });
 
+// Keyed per user, not per IP: the caller is already signed in, so the risk is a
+// hijacked session guessing the current password to take the account over.
+const CHANGE_PASSWORD_RATE_LIMIT = { limit: 5, windowSec: 15 * 60 };
+
 export type ChangePasswordResult = { ok: true; redirectTo: string } | { ok: false; error: string };
 
 export async function changePasswordAction(formData: FormData): Promise<ChangePasswordResult> {
@@ -74,6 +79,22 @@ export async function changePasswordAction(formData: FormData): Promise<ChangePa
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const gateKey = `change-password:${session.user.id}`;
+  const gate = rateLimit(gateKey, CHANGE_PASSWORD_RATE_LIMIT);
+  if (!gate.ok) {
+    await logAudit({
+      action: "LOGIN_FAILED",
+      userId: session.user.id,
+      resourceType: "User",
+      resourceId: session.user.id,
+      metadata: { reason: "rate_limited", context: "change_password", retryAfterSec: gate.retryAfterSec },
+    });
+    return {
+      ok: false,
+      error: `Too many attempts. Try again in ${Math.ceil(gate.retryAfterSec / 60)} minute(s).`,
+    };
   }
 
   const user = await prisma.user.findUnique({
@@ -101,6 +122,8 @@ export async function changePasswordAction(formData: FormData): Promise<ChangePa
       mustChangePassword: false,
     },
   });
+
+  rateLimitReset(gateKey);
 
   await logAudit({
     action: "PASSWORD_CHANGED",
